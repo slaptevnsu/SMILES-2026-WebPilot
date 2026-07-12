@@ -1,0 +1,11 @@
+{
+  "id": "sample_diagnostic_repair",
+  "type": "diagnostic_repair",
+  "repo_path": "examples/buggy_counter",
+  "instruction": "The counter button is visible, but clicking it does not increase the displayed count. Fix the issue.",
+  "max_iterations": 2,
+  "metadata": {
+    "difficulty": "easy",
+    "source": "manual_mvp"
+  }
+}
