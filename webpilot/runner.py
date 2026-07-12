@@ -5,7 +5,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from webpilot.schemas import AgentVariant, Plan, RunSummary, Task
+from webpilot.browser import BrowserExecutor
+from webpilot.schemas import AgentVariant, BrowserRunResult, Plan, RunSummary, Task
 
 
 class WebPilotRunner:
@@ -29,16 +30,35 @@ class WebPilotRunner:
         self._write_json(run_dir / "task.json", task.model_dump(mode="json", by_alias=True))
         self._write_json(run_dir / "plan.json", plan.model_dump(mode="json"))
 
+        browser_result: BrowserRunResult | None = None
+
+        if task.task_type == "diagnostic_repair":
+            if task.repo_path is None:
+                raise ValueError("diagnostic_repair task must define repo_path")
+
+            repo_path = self._resolve_path(task.repo_path)
+            browser_result = BrowserExecutor().run(repo_path=repo_path, run_dir=run_dir)
+
+            status = "browser_executed" if browser_result.status == "ok" else "browser_executed_with_issues"
+            message = (
+                "Stage 3 completed: task was loaded, an initial plan was created, "
+                "the frontend app was launched in a browser, and browser artifacts were saved."
+            )
+        else:
+            status = "planned_only"
+            message = (
+                "Stage 1 completed: task was loaded, an initial plan was created, "
+                "and artifacts were saved. Browser execution for text_generation is not implemented yet."
+            )
+
         summary = RunSummary(
             task_id=task.id,
             task_type=task.task_type,
             variant=variant,
-            status="planned_only",
+            status=status,
             run_dir=str(run_dir),
-            message=(
-                "Stage 1 completed: task was loaded, an initial plan was created, "
-                "and artifacts were saved. Browser execution is not implemented yet."
-            ),
+            message=message,
+            browser=browser_result,
         )
 
         self._write_json(run_dir / "summary.json", summary.model_dump(mode="json"))
@@ -88,10 +108,13 @@ class WebPilotRunner:
             "task.json",
             "plan.json",
             "summary.json",
+            "npm_install.log",
+            "dev_server.log",
             "screenshot.png",
             "dom_snapshot.html",
             "console_logs.json",
             "page_errors.json",
+            "browser_result.json",
             "test_results.json",
         ]
 

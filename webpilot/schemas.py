@@ -42,3 +42,13 @@ class RunSummary(BaseModel):
     status: str
     run_dir: str
     message: str
+    browser: BrowserRunResult | None = None
+
+class BrowserRunResult(BaseModel):
+    repo_path: str
+    url: str
+    port: int
+    status: str
+    artifacts: dict[str, str]
+    console_log_count: int
+    page_error_count: int

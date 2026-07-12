@@ -9,6 +9,7 @@ description = "Browser-grounded web coding agent MVP for SMILES 2026"
 requires-python = ">=3.10"
 dependencies = [
     "pydantic>=2.7",
+    "playwright>=1.49",
 ]
 
 [project.optional-dependencies]
