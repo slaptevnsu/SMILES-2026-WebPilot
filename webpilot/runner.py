@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+import shutil
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from webpilot.browser import BrowserExecutor
-from webpilot.schemas import AgentVariant, BrowserRunResult, Plan, RunSummary, Task
+from webpilot.repairer import DeterministicRepairer
+from webpilot.schemas import AgentVariant, BrowserRunResult, Plan, RunSummary, Task, RepairResult
 
 
 class WebPilotRunner:
@@ -30,20 +32,72 @@ class WebPilotRunner:
         self._write_json(run_dir / "task.json", task.model_dump(mode="json", by_alias=True))
         self._write_json(run_dir / "plan.json", plan.model_dump(mode="json"))
 
-        browser_result: BrowserRunResult | None = None
+        initial_browser_result: BrowserRunResult | None = None
+        final_browser_result: BrowserRunResult | None = None
+        repair_result: RepairResult | None = None
 
         if task.task_type == "diagnostic_repair":
             if task.repo_path is None:
                 raise ValueError("diagnostic_repair task must define repo_path")
 
-            repo_path = self._resolve_path(task.repo_path)
-            browser_result = BrowserExecutor().run(repo_path=repo_path, run_dir=run_dir, task=task)
-
-            status = "browser_executed" if browser_result.status == "ok" else "browser_executed_with_issues"
-            message = (
-                "Stage 3 completed: task was loaded, an initial plan was created, "
-                "the frontend app was launched in a browser, and browser artifacts were saved."
+            source_repo_path = self._resolve_path(task.repo_path)
+            workspace_repo_path = self._prepare_workspace_repo(
+                source_repo_path=source_repo_path,
+                run_dir=run_dir,
             )
+
+            initial_browser_result = BrowserExecutor().run(
+                repo_path=workspace_repo_path,
+                run_dir=run_dir / "initial_browser",
+                task=task,
+            )
+            final_browser_result = initial_browser_result
+
+            if variant == "browser-feedback" and initial_browser_result.failed_test_count > 0:
+                repair_result = DeterministicRepairer().run(
+                    repo_path=workspace_repo_path,
+                    run_dir=run_dir,
+                    task=task,
+                    browser_result=initial_browser_result,
+                )
+
+                if repair_result.status == "applied":
+                    final_browser_result = BrowserExecutor().run(
+                        repo_path=workspace_repo_path,
+                        run_dir=run_dir / "repaired_browser",
+                        task=task,
+                    )
+
+                    if final_browser_result.status == "ok":
+                        status = "repaired_and_verified"
+                        message = (
+                            "Stage 5 completed: the initial browser run detected an interaction failure, "
+                            "a deterministic repair was applied, and the repaired app passed browser verification."
+                        )
+                    else:
+                        status = "repair_attempted_with_issues"
+                        message = (
+                            "Stage 5 completed with issues: a repair was applied, "
+                            "but the repaired app still did not pass browser verification."
+                        )
+                else:
+                    status = "repair_skipped_or_failed"
+                    message = (
+                        "Stage 5 completed with issues: the initial browser run detected a failure, "
+                        "but no repair was successfully applied."
+                    )
+
+            else:
+                status = (
+                    "browser_executed"
+                    if final_browser_result.status == "ok"
+                    else "browser_executed_with_issues"
+                )
+                message = (
+                    "Stage 4 completed: task was loaded, the frontend app was launched in a browser, "
+                    "browser artifacts were saved, and interaction tests were executed."
+                )
+
         else:
             status = "planned_only"
             message = (
@@ -58,7 +112,9 @@ class WebPilotRunner:
             status=status,
             run_dir=str(run_dir),
             message=message,
-            browser=browser_result,
+            browser=final_browser_result,
+            initial_browser=initial_browser_result,
+            repair=repair_result,
         )
 
         self._write_json(run_dir / "summary.json", summary.model_dump(mode="json"))
@@ -99,8 +155,9 @@ class WebPilotRunner:
             steps.extend(
                 [
                     "Diagnose failures using collected browser evidence",
-                    "Apply a repair patch if possible",
+                    "Apply a deterministic repair patch if possible",
                     "Re-run the browser execution after repair",
+                    "Verify that the repaired project passes the interaction check",
                 ]
             )
 
@@ -108,18 +165,32 @@ class WebPilotRunner:
             "task.json",
             "plan.json",
             "summary.json",
-            "npm_install.log",
-            "dev_server.log",
-            "screenshot.png",
-            "dom_snapshot.html",
-            "console_logs.json",
-            "page_errors.json",
-            "browser_result.json",
-            "test_results.json",
+            "workspace/",
+            "initial_browser/npm_install.log",
+            "initial_browser/dev_server.log",
+            "initial_browser/screenshot.png",
+            "initial_browser/dom_snapshot.html",
+            "initial_browser/console_logs.json",
+            "initial_browser/page_errors.json",
+            "initial_browser/test_results.json",
+            "initial_browser/browser_result.json",
         ]
 
-        if task.task_type == "diagnostic_repair":
-            expected_artifacts.extend(["repair_plan.json", "patch.diff"])
+        if variant == "browser-feedback":
+            expected_artifacts.extend(
+                [
+                    "repair_plan.json",
+                    "patch.diff",
+                    "repaired_browser/npm_install.log",
+                    "repaired_browser/dev_server.log",
+                    "repaired_browser/screenshot.png",
+                    "repaired_browser/dom_snapshot.html",
+                    "repaired_browser/console_logs.json",
+                    "repaired_browser/page_errors.json",
+                    "repaired_browser/test_results.json",
+                    "repaired_browser/browser_result.json",
+                ]
+            )
 
         return Plan(
             task_id=task.id,
@@ -134,6 +205,27 @@ class WebPilotRunner:
         run_dir = self.project_root / "outputs" / task_id / timestamp
         run_dir.mkdir(parents=True, exist_ok=False)
         return run_dir
+    
+    def _prepare_workspace_repo(self, source_repo_path: Path, run_dir: Path) -> Path:
+        source_repo_path = source_repo_path.resolve()
+
+        workspace_root = run_dir / "workspace"
+        workspace_repo_path = workspace_root / source_repo_path.name
+
+        shutil.copytree(
+            source_repo_path,
+            workspace_repo_path,
+            ignore=shutil.ignore_patterns(
+                "node_modules",
+                "dist",
+                ".vite",
+                ".git",
+                "playwright-report",
+                "test-results",
+            ),
+        )
+
+        return workspace_repo_path
     
     def _resolve_path(self, path: Path) -> Path:
         if path.is_absolute():

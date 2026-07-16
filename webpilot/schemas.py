@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 TaskType = Literal["text_generation", "diagnostic_repair"]
 AgentVariant = Literal["base", "browser-feedback"]
 TestStatus = Literal["passed", "failed", "skipped"]
+RepairStatus = Literal["applied", "skipped", "failed"]
 
 
 class Task(BaseModel):
@@ -56,6 +57,8 @@ class RunSummary(BaseModel):
     run_dir: str
     message: str
     browser: BrowserRunResult | None = None
+    initial_browser: BrowserRunResult | None = None
+    repair: RepairResult | None = None
 
 class BrowserRunResult(BaseModel):
     repo_path: str
@@ -68,3 +71,9 @@ class BrowserRunResult(BaseModel):
     test_status: TestStatus | None = None
     passed_test_count: int = 0
     failed_test_count: int = 0
+
+class RepairResult(BaseModel):
+    status: RepairStatus
+    reason: str
+    target_file: str | None = None
+    artifacts: dict[str, str] = Field(default_factory=dict)
