@@ -12,7 +12,8 @@ from typing import Any
 
 from playwright.sync_api import sync_playwright
 
-from webpilot.schemas import BrowserRunResult
+from webpilot.schemas import BrowserRunResult, InteractionTestResult, Task
+from webpilot.tester import InteractionTester
 
 
 class BrowserExecutor:
@@ -26,7 +27,7 @@ class BrowserExecutor:
         self.page_load_timeout_ms = page_load_timeout_ms
         self.server_start_timeout_s = server_start_timeout_s
 
-    def run(self, repo_path: Path, run_dir: Path) -> BrowserRunResult:
+    def run(self, repo_path: Path, run_dir: Path, task: Task) -> BrowserRunResult:
         repo_path = repo_path.resolve()
         run_dir = run_dir.resolve()
         run_dir.mkdir(parents=True, exist_ok=True)
@@ -42,6 +43,7 @@ class BrowserExecutor:
             "console_logs": str(run_dir / "console_logs.json"),
             "page_errors": str(run_dir / "page_errors.json"),
             "browser_result": str(run_dir / "browser_result.json"),
+            "test_results": str(run_dir / "test_results.json"),
         }
 
         install_result = self._run_npm_install(repo_path=repo_path, log_path=run_dir / "npm_install.log")
@@ -65,6 +67,14 @@ class BrowserExecutor:
         console_logs: list[dict[str, Any]] = []
         page_errors: list[dict[str, Any]] = []
 
+        test_results = InteractionTestResult(
+            status="skipped",
+            checks=[],
+            passed_count=0,
+            failed_count=0,
+            skipped_count=0,
+        )
+
         try:
             server_process = self._start_dev_server(
                 repo_path=repo_path,
@@ -81,13 +91,20 @@ class BrowserExecutor:
                 page.on("pageerror", lambda exc: page_errors.append({"message": str(exc)}))
 
                 page.goto(url, wait_until="networkidle", timeout=self.page_load_timeout_ms)
+                
+                test_results = InteractionTester().run(page=page, task=task)
 
                 page.screenshot(path=str(run_dir / "screenshot.png"), full_page=True)
                 (run_dir / "dom_snapshot.html").write_text(page.content(), encoding="utf-8")
 
                 browser.close()
 
-            status = "ok" if not page_errors else "loaded_with_page_errors"
+            if page_errors:
+                status = "loaded_with_page_errors"
+            elif test_results.failed_count > 0:
+                status = "loaded_with_test_failures"
+            else:
+                status = "ok"
 
         except Exception as exc:
             status = "browser_execution_failed"
@@ -105,6 +122,7 @@ class BrowserExecutor:
 
         self._write_json(run_dir / "console_logs.json", console_logs)
         self._write_json(run_dir / "page_errors.json", page_errors)
+        self._write_json(run_dir / "test_results.json", test_results.model_dump(mode="json"))
 
         result = BrowserRunResult(
             repo_path=str(repo_path),
@@ -114,6 +132,9 @@ class BrowserExecutor:
             artifacts=artifacts,
             console_log_count=len(console_logs),
             page_error_count=len(page_errors),
+            test_status=test_results.status,
+            passed_test_count=test_results.passed_count,
+            failed_test_count=test_results.failed_count,
         )
         self._write_json(run_dir / "browser_result.json", result.model_dump(mode="json"))
         return result

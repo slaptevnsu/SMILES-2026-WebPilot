@@ -37,7 +37,7 @@ class WebPilotRunner:
                 raise ValueError("diagnostic_repair task must define repo_path")
 
             repo_path = self._resolve_path(task.repo_path)
-            browser_result = BrowserExecutor().run(repo_path=repo_path, run_dir=run_dir)
+            browser_result = BrowserExecutor().run(repo_path=repo_path, run_dir=run_dir, task=task)
 
             status = "browser_executed" if browser_result.status == "ok" else "browser_executed_with_issues"
             message = (

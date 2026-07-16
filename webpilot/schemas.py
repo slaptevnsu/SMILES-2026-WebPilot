@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 TaskType = Literal["text_generation", "diagnostic_repair"]
 AgentVariant = Literal["base", "browser-feedback"]
+TestStatus = Literal["passed", "failed", "skipped"]
 
 
 class Task(BaseModel):
@@ -35,6 +36,18 @@ class Plan(BaseModel):
     steps: list[str]
     expected_artifacts: list[str]
 
+class TestCheckResult(BaseModel):
+    name: str
+    status: TestStatus
+    details: dict[str, Any] = Field(default_factory=dict)
+
+class InteractionTestResult(BaseModel):
+    status: TestStatus
+    checks: list[TestCheckResult]
+    passed_count: int
+    failed_count: int
+    skipped_count: int
+
 class RunSummary(BaseModel):
     task_id: str
     task_type: TaskType
@@ -52,3 +65,6 @@ class BrowserRunResult(BaseModel):
     artifacts: dict[str, str]
     console_log_count: int
     page_error_count: int
+    test_status: TestStatus | None = None
+    passed_test_count: int = 0
+    failed_test_count: int = 0
