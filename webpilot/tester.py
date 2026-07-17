@@ -10,6 +10,9 @@ class InteractionTester:
         if task.task_type == "diagnostic_repair" and self._looks_like_counter_task(task):
             return self._test_counter_increment(page)
         
+        if task.task_type == "diagnostic_repair" and self._looks_like_input_echo_task(task):
+            return self._test_input_echo(page)
+        
         check = TestCheckResult(
             name="interaction_test_selection",
             status="skipped",
@@ -25,6 +28,10 @@ class InteractionTester:
     def _looks_like_counter_task(self, task: Task) -> bool:
         text = f"{task.id} {task.instruction}".lower()
         return "counter" in text and "button" in text
+    
+    def _looks_like_input_echo_task(self, task: Task) -> bool:
+        text = f"{task.id} {task.instruction}".lower()
+        return "input" in text and ("echo" in text or "preview" in text)
 
     def _test_counter_increment(self, page: Page) -> InteractionTestResult:
         check_name = "counter increments after button click"
@@ -61,6 +68,51 @@ class InteractionTester:
                     ),
                 },
             )
+        except Exception as exc:
+            check = TestCheckResult(
+                name=check_name,
+                status="failed",
+                details={
+                    "reason": "Interaction test raised an exception.",
+                    "exception_type": exc.__class__.__name__,
+                    "exception_message": str(exc),
+                },
+            )
+
+        return self._build_result([check])
+    
+    def _test_input_echo(self, page: Page) -> InteractionTestResult:
+        check_name = "input text is reflected in preview"
+        test_value = "hello webpilot"
+
+        try:
+            input_locator = page.locator('[data-testid="echo-input"]')
+            preview_locator = page.locator('[data-testid="echo-preview"]')
+
+            before_text = preview_locator.inner_text(timeout=5_000).strip()
+
+            input_locator.fill(test_value, timeout=5_000)
+            page.wait_for_timeout(300)
+
+            after_text = preview_locator.inner_text(timeout=5_000).strip()
+            passed = test_value in after_text
+
+            check = TestCheckResult(
+                name=check_name,
+                status="passed" if passed else "failed",
+                details={
+                    "input_value": test_value,
+                    "before_text": before_text,
+                    "after_text": after_text,
+                    "expected_text": test_value,
+                    "reason": (
+                        "Input preview updated correctly."
+                        if passed
+                        else "Input preview did not update after typing into the input field."
+                    ),
+                },
+            )
+
         except Exception as exc:
             check = TestCheckResult(
                 name=check_name,

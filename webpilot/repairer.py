@@ -32,17 +32,7 @@ class DeterministicRepairer:
             )
             self._write_result(run_dir, result)
             return result
-
-        if not self._looks_like_counter_failure(task=task, failure_reasons=failure_reasons):
-            result = RepairResult(
-                status="skipped",
-                reason="No deterministic repair rule matched the observed failure.",
-                target_file=None,
-                artifacts=artifacts,
-            )
-            self._write_result(run_dir, result)
-            return result
-
+        
         if not target_file.exists():
             result = RepairResult(
                 status="failed",
@@ -52,14 +42,31 @@ class DeterministicRepairer:
             )
             self._write_result(run_dir, result)
             return result
-
+        
         before = target_file.read_text(encoding="utf-8")
-        after = self._repair_counter_increment_handler(before)
+
+        if self._looks_like_counter_failure(task=task, failure_reasons=failure_reasons):
+            after = self._repair_counter_increment_handler(before)
+            repair_reason = "Applied deterministic repair for a counter button that did not update React state."
+
+        elif self._looks_like_input_echo_failure(task=task, failure_reasons=failure_reasons):
+            after = self._repair_input_echo_handler(before)
+            repair_reason = "Applied deterministic repair for an input field that did not update preview state."
+
+        else:
+            result = RepairResult(
+                status="skipped",
+                reason="No deterministic repair rule matched the observed failure.",
+                target_file=None,
+                artifacts=artifacts,
+            )
+            self._write_result(run_dir, result)
+            return result
 
         if after == before:
             result = RepairResult(
                 status="failed",
-                reason="Counter repair rule matched the failure, but no source-code change was produced.",
+                reason="A repair rule matched the failure, but no source-code change was produced.",
                 target_file=str(target_file),
                 artifacts=artifacts,
             )
@@ -77,7 +84,7 @@ class DeterministicRepairer:
 
         result = RepairResult(
             status="applied",
-            reason="Applied deterministic repair for a counter button that did not update React state.",
+            reason=repair_reason,
             target_file=str(target_file),
             artifacts=artifacts,
         )
@@ -119,6 +126,18 @@ class DeterministicRepairer:
             )
         )
 
+    def _looks_like_input_echo_failure(self, task: Task, failure_reasons: list[str]) -> bool:
+        text = " ".join([task.id, task.instruction, *failure_reasons]).lower()
+
+        return (
+            "input" in text
+            and (
+                "preview" in text
+                or "echo" in text
+                or "did not update" in text
+            )
+        )
+    
     def _repair_counter_increment_handler(self, source: str) -> str:
         replacement = (
             "function handleIncrement() {\n"
@@ -143,6 +162,32 @@ class DeterministicRepairer:
             "setCount((currentCount) => currentCount + 1);",
             1,
         )
+    
+    def _repair_input_echo_handler(self, source: str) -> str:
+        replacement = (
+            "function handleChange(event) {\n"
+            "    setMessage(event.target.value);\n"
+            "  }"
+        )
+
+        pattern = (
+            r"function\s+handleChange\s*\(\s*event\s*\)\s*\{\s*"
+            r"(?://[^\n]*\n\s*)?"
+            r"event\.target\.value\s*;\s*"
+            r"\}"
+        )
+
+        repaired, replacements = re.subn(pattern, replacement, source, count=1)
+
+        if replacements > 0:
+            return repaired
+
+        return source.replace(
+            "event.target.value;",
+            "setMessage(event.target.value);",
+            1,
+        )
+
 
     def _build_patch(self, before: str, after: str, relative_path: str) -> str:
         return "".join(

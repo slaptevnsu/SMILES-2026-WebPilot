@@ -1,0 +1,11 @@
+{
+  "id": "sample_input_echo_repair",
+  "type": "diagnostic_repair",
+  "instruction": "Diagnose and repair a React input echo app. When the user types into the input field, the preview text should update to match the typed message.",
+  "repo_path": "examples/buggy_input_echo",
+  "max_iterations": 1,
+  "metadata": {
+    "scenario": "input_echo",
+    "expected_behavior": "Typing into the input should update the preview text."
+  }
+}
