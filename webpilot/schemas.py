@@ -77,3 +77,27 @@ class RepairResult(BaseModel):
     reason: str
     target_file: str | None = None
     artifacts: dict[str, str] = Field(default_factory=dict)
+
+class EvaluationRunRecord(BaseModel):
+    task_id: str
+    task_type: TaskType
+    variant: AgentVariant
+    status: str
+    run_dir: str
+    final_browser_status: str | None = None
+    final_test_status: TestStatus | None = None
+    passed_test_count: int = 0
+    failed_test_count: int = 0
+    initial_browser_status: str | None = None
+    initial_test_status: TestStatus | None = None
+    repair_status: RepairStatus | None = None
+
+
+class EvaluationSummary(BaseModel):
+    evaluation_id: str
+    output_dir: str
+    total_runs: int
+    passed_runs: int
+    failed_runs: int
+    repaired_runs: int
+    records: list[EvaluationRunRecord]
