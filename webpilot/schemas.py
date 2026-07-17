@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 TaskType = Literal["text_generation", "diagnostic_repair"]
-AgentVariant = Literal["base", "browser-feedback"]
+AgentVariant = Literal["base", "deterministic-browser-feedback"]
 TestStatus = Literal["passed", "failed", "skipped"]
 RepairStatus = Literal["applied", "skipped", "failed"]
 

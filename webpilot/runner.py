@@ -53,7 +53,7 @@ class WebPilotRunner:
             )
             final_browser_result = initial_browser_result
 
-            if variant == "browser-feedback" and initial_browser_result.failed_test_count > 0:
+            if variant == "deterministic-browser-feedback" and initial_browser_result.failed_test_count > 0:
                 repair_result = DeterministicRepairer().run(
                     repo_path=workspace_repo_path,
                     run_dir=run_dir,
@@ -151,7 +151,7 @@ class WebPilotRunner:
                 ]
             )
         
-        if variant == "browser-feedback":
+        if variant == "deterministic-browser-feedback":
             steps.extend(
                 [
                     "Diagnose failures using collected browser evidence",
@@ -176,7 +176,7 @@ class WebPilotRunner:
             "initial_browser/browser_result.json",
         ]
 
-        if variant == "browser-feedback":
+        if variant == "deterministic-browser-feedback":
             expected_artifacts.extend(
                 [
                     "repair_plan.json",

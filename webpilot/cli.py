@@ -31,7 +31,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument(
         "--variant",
         default="base",
-        choices=["base", "browser-feedback"],
+        choices=["base", "deterministic-browser-feedback"],
         help="Agent variant to run.",
     )
     run_parser.add_argument(
@@ -55,9 +55,9 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate_parser.add_argument(
         "--variants",
         nargs="+",
-        choices=["base", "browser-feedback"],
+        choices=["base", "deterministic-browser-feedback"],
         default=None,
-        help="Variants to evaluate. Defaults to base and browser-feedback.",
+        help="Variants to evaluate. Defaults to base and deterministic-browser-feedback.",
     )
 
     return parser

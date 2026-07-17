@@ -18,7 +18,7 @@ class WebPilotEvaluator:
         task_paths: list[Path],
         variants: list[AgentVariant] | None = None,
     ) -> EvaluationSummary:
-        variants = variants or ["base", "browser-feedback"]
+        variants = variants or ["base", "deterministic-browser-feedback"]
 
         evaluation_id = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_dir = self.project_root / "outputs" / "evaluations" / evaluation_id
