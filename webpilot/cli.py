@@ -10,6 +10,14 @@ from webpilot.runner import WebPilotRunner
 from webpilot.schemas import AgentVariant
 
 
+AGENT_VARIANT_CHOICES = [
+    "base",
+    "deterministic-browser-feedback",
+    "llm-code-only",
+    "llm-browser-feedback",
+]
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="webpilot",
@@ -31,7 +39,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument(
         "--variant",
         default="base",
-        choices=["base", "deterministic-browser-feedback"],
+        choices=AGENT_VARIANT_CHOICES,
         help="Agent variant to run.",
     )
     run_parser.add_argument(
@@ -55,7 +63,7 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate_parser.add_argument(
         "--variants",
         nargs="+",
-        choices=["base", "deterministic-browser-feedback"],
+        choices=AGENT_VARIANT_CHOICES,
         default=None,
         help="Variants to evaluate. Defaults to base and deterministic-browser-feedback.",
     )

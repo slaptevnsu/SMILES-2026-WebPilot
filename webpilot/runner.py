@@ -6,9 +6,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from webpilot.agents import LLMRepairer
 from webpilot.browser import BrowserExecutor
 from webpilot.repairer import DeterministicRepairer
-from webpilot.schemas import AgentVariant, BrowserRunResult, Plan, RunSummary, Task, RepairResult
+from webpilot.schemas import AgentVariant, BrowserRunResult, Plan, RepairResult, RunSummary, Task
 
 
 class WebPilotRunner:
@@ -53,13 +54,35 @@ class WebPilotRunner:
             )
             final_browser_result = initial_browser_result
 
-            if variant == "deterministic-browser-feedback" and initial_browser_result.failed_test_count > 0:
-                repair_result = DeterministicRepairer().run(
-                    repo_path=workspace_repo_path,
-                    run_dir=run_dir,
-                    task=task,
-                    browser_result=initial_browser_result,
-                )
+            repair_variants = [
+                "deterministic-browser-feedback",
+                "llm-code-only",
+                "llm-browser-feedback",
+            ]
+
+            initial_run_needs_repair = initial_browser_result.status != "ok"
+
+            if initial_run_needs_repair and variant in repair_variants:
+                if variant == "deterministic-browser-feedback":
+                    repair_result = DeterministicRepairer().run(
+                        repo_path=workspace_repo_path,
+                        run_dir=run_dir,
+                        task=task,
+                        browser_result=initial_browser_result,
+                    )
+                    repair_description = "a deterministic repair"
+
+                else:
+                    include_browser_feedback = variant == "llm-browser-feedback"
+
+                    repair_result = LLMRepairer().run(
+                        repo_path=workspace_repo_path,
+                        run_dir=run_dir,
+                        task=task,
+                        browser_result=initial_browser_result,
+                        include_browser_feedback=include_browser_feedback,
+                    )
+                    repair_description = "an LLM-generated repair"
 
                 if repair_result.status == "applied":
                     final_browser_result = BrowserExecutor().run(
@@ -71,19 +94,18 @@ class WebPilotRunner:
                     if final_browser_result.status == "ok":
                         status = "repaired_and_verified"
                         message = (
-                            "Stage 5 completed: the initial browser run detected an interaction failure, "
-                            "a deterministic repair was applied, and the repaired app passed browser verification."
+                            "The initial browser run detected an interaction failure, "
+                            f"{repair_description} was applied, and the repaired app passed browser verification."
                         )
                     else:
                         status = "repair_attempted_with_issues"
                         message = (
-                            "Stage 5 completed with issues: a repair was applied, "
-                            "but the repaired app still did not pass browser verification."
+                            "A repair was applied, but the repaired app still did not pass browser verification."
                         )
                 else:
                     status = "repair_skipped_or_failed"
                     message = (
-                        "Stage 5 completed with issues: the initial browser run detected a failure, "
+                        "The initial browser run detected a failure, "
                         "but no repair was successfully applied."
                     )
 
@@ -94,7 +116,7 @@ class WebPilotRunner:
                     else "browser_executed_with_issues"
                 )
                 message = (
-                    "Stage 4 completed: task was loaded, the frontend app was launched in a browser, "
+                    "Task was loaded, the frontend app was launched in a browser, "
                     "browser artifacts were saved, and interaction tests were executed."
                 )
 
@@ -161,6 +183,25 @@ class WebPilotRunner:
                 ]
             )
 
+        elif variant == "llm-code-only":
+            steps.extend(
+                [
+                    "Ask an LLM repair agent to repair the source code using only the task instruction and source file",
+                    "Re-run the browser execution after repair",
+                    "Verify that the repaired project passes the interaction check",
+                ]
+            )
+
+        elif variant == "llm-browser-feedback":
+            steps.extend(
+                [
+                    "Diagnose failures using collected browser evidence",
+                    "Ask an LLM repair agent to repair the source code using task, source file, and browser feedback",
+                    "Re-run the browser execution after repair",
+                    "Verify that the repaired project passes the interaction check",
+                ]
+            )
+
         expected_artifacts = [
             "task.json",
             "plan.json",
@@ -181,6 +222,24 @@ class WebPilotRunner:
                 [
                     "repair_plan.json",
                     "patch.diff",
+                    "repaired_browser/npm_install.log",
+                    "repaired_browser/dev_server.log",
+                    "repaired_browser/screenshot.png",
+                    "repaired_browser/dom_snapshot.html",
+                    "repaired_browser/console_logs.json",
+                    "repaired_browser/page_errors.json",
+                    "repaired_browser/test_results.json",
+                    "repaired_browser/browser_result.json",
+                ]
+            )
+
+        elif variant in ["llm-code-only", "llm-browser-feedback"]:
+            expected_artifacts.extend(
+                [
+                    "llm_repair/llm_prompt.txt",
+                    "llm_repair/llm_response.txt",
+                    "llm_repair/repair_plan.json",
+                    "llm_repair/patch.diff",
                     "repaired_browser/npm_install.log",
                     "repaired_browser/dev_server.log",
                     "repaired_browser/screenshot.png",
