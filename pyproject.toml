@@ -10,6 +10,7 @@ requires-python = ">=3.10"
 dependencies = [
     "pydantic>=2.7",
     "playwright>=1.49",
+    "openai>=2.0.0",
 ]
 
 [project.optional-dependencies]
