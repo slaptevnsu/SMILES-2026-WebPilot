@@ -4,6 +4,15 @@
   "instruction": "Diagnose and repair a React input echo app. When the user types into the input field, the preview text should update to match the typed message.",
   "repo_path": "examples/buggy_input_echo",
   "max_iterations": 1,
+  "interaction_checks": [
+    {
+      "name": "input text is reflected in preview",
+      "kind": "fill_updates_text",
+      "input_selector": "[data-testid=\"echo-input\"]",
+      "target_selector": "[data-testid=\"echo-preview\"]",
+      "value": "hello webpilot"
+    }
+  ],
   "metadata": {
     "scenario": "input_echo",
     "expected_behavior": "Typing into the input should update the preview text."

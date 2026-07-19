@@ -2,129 +2,160 @@ from __future__ import annotations
 
 from playwright.sync_api import Page
 
-from webpilot.schemas import InteractionTestResult, Task, TestCheckResult
+from webpilot.schemas import InteractionCheck, InteractionTestResult, Task, TestCheckResult
 
 
 class InteractionTester:
     def run(self, page: Page, task: Task) -> InteractionTestResult:
-        if task.task_type == "diagnostic_repair" and self._looks_like_counter_task(task):
-            return self._test_counter_increment(page)
-        
-        if task.task_type == "diagnostic_repair" and self._looks_like_input_echo_task(task):
-            return self._test_input_echo(page)
-        
-        check = TestCheckResult(
-            name="interaction_test_selection",
+        if not task.interaction_checks:
+            check = TestCheckResult(
+                name="interaction_test_selection",
+                status="skipped",
+                details={
+                    "reason": "No interaction checks are defined for this task.",
+                    "task_id": task.id,
+                    "task_type": task.task_type,
+                },
+            )
+            return self._build_result([check])
+
+        checks = [
+            self._run_interaction_check(page=page, check=check)
+            for check in task.interaction_checks
+        ]
+
+        return self._build_result(checks)
+
+    def _run_interaction_check(
+        self,
+        *,
+        page: Page,
+        check: InteractionCheck,
+    ) -> TestCheckResult:
+        if check.kind == "click_increments_text_int":
+            return self._test_click_increments_text_int(page=page, check=check)
+
+        if check.kind == "fill_updates_text":
+            return self._test_fill_updates_text(page=page, check=check)
+
+        return TestCheckResult(
+            name=check.name,
             status="skipped",
             details={
-                "reason": "No tasl-specific interaction test is implemented for this task yet.",
-                "task_id": task.id,
-                "task_type": task.task_type,
+                "reason": f"Unsupported interaction check kind: {check.kind}",
+                "kind": check.kind,
             },
         )
-        return self._build_result([check])
 
-
-    def _looks_like_counter_task(self, task: Task) -> bool:
-        text = f"{task.id} {task.instruction}".lower()
-        return "counter" in text and "button" in text
-    
-    def _looks_like_input_echo_task(self, task: Task) -> bool:
-        text = f"{task.id} {task.instruction}".lower()
-        return "input" in text and ("echo" in text or "preview" in text)
-
-    def _test_counter_increment(self, page: Page) -> InteractionTestResult:
-        check_name = "counter increments after button click"
-
+    def _test_click_increments_text_int(
+        self,
+        *,
+        page: Page,
+        check: InteractionCheck,
+    ) -> TestCheckResult:
         try:
-            count_locator = page.locator('[data-testid="count-value"]')
-            button_locator = page.locator('[data-testid="increment-button"]')
+            if check.action_selector is None:
+                raise ValueError("action_selector is required for click_increments_text_int")
 
-            before_text = count_locator.inner_text(timeout=5_000).strip()
+            target_locator = page.locator(check.target_selector)
+            action_locator = page.locator(check.action_selector)
+
+            before_text = target_locator.inner_text(timeout=check.timeout_ms).strip()
             before_value = self._parse_int(before_text)
 
-            button_locator.click(timeout=5_000)
-            page.wait_for_timeout(300)
+            action_locator.click(timeout=check.timeout_ms)
+            page.wait_for_timeout(check.settle_ms)
 
-            after_text = count_locator.inner_text(timeout=5_000).strip()
+            after_text = target_locator.inner_text(timeout=check.timeout_ms).strip()
             after_value = self._parse_int(after_text)
 
             expected_value = before_value + 1
             passed = after_value == expected_value
 
-            check = TestCheckResult(
-                name=check_name,
+            return TestCheckResult(
+                name=check.name,
                 status="passed" if passed else "failed",
                 details={
+                    "kind": check.kind,
+                    "target_selector": check.target_selector,
+                    "action_selector": check.action_selector,
                     "before_text": before_text,
                     "after_text": after_text,
                     "before_value": before_value,
                     "after_value": after_value,
                     "expected_value": expected_value,
                     "reason": (
-                        "Counter increased correctly."
+                        "Text value incremented correctly after the click."
                         if passed
-                        else "Counter value did not increase after clicking the button."
+                        else "Text value did not increment after the click."
                     ),
                 },
             )
+
         except Exception as exc:
-            check = TestCheckResult(
-                name=check_name,
-                status="failed",
-                details={
-                    "reason": "Interaction test raised an exception.",
-                    "exception_type": exc.__class__.__name__,
-                    "exception_message": str(exc),
-                },
-            )
+            return self._build_exception_check(check=check, exc=exc)
 
-        return self._build_result([check])
-    
-    def _test_input_echo(self, page: Page) -> InteractionTestResult:
-        check_name = "input text is reflected in preview"
-        test_value = "hello webpilot"
-
+    def _test_fill_updates_text(
+        self,
+        *,
+        page: Page,
+        check: InteractionCheck,
+    ) -> TestCheckResult:
         try:
-            input_locator = page.locator('[data-testid="echo-input"]')
-            preview_locator = page.locator('[data-testid="echo-preview"]')
+            if check.input_selector is None:
+                raise ValueError("input_selector is required for fill_updates_text")
+            if check.value is None:
+                raise ValueError("value is required for fill_updates_text")
 
-            before_text = preview_locator.inner_text(timeout=5_000).strip()
+            input_locator = page.locator(check.input_selector)
+            target_locator = page.locator(check.target_selector)
 
-            input_locator.fill(test_value, timeout=5_000)
-            page.wait_for_timeout(300)
+            before_text = target_locator.inner_text(timeout=check.timeout_ms).strip()
 
-            after_text = preview_locator.inner_text(timeout=5_000).strip()
-            passed = test_value in after_text
+            input_locator.fill(check.value, timeout=check.timeout_ms)
+            page.wait_for_timeout(check.settle_ms)
 
-            check = TestCheckResult(
-                name=check_name,
+            after_text = target_locator.inner_text(timeout=check.timeout_ms).strip()
+            passed = check.value in after_text
+
+            return TestCheckResult(
+                name=check.name,
                 status="passed" if passed else "failed",
                 details={
-                    "input_value": test_value,
+                    "kind": check.kind,
+                    "input_selector": check.input_selector,
+                    "target_selector": check.target_selector,
+                    "input_value": check.value,
                     "before_text": before_text,
                     "after_text": after_text,
-                    "expected_text": test_value,
+                    "expected_text": check.value,
                     "reason": (
-                        "Input preview updated correctly."
+                        "Target text updated correctly after filling the input."
                         if passed
-                        else "Input preview did not update after typing into the input field."
+                        else "Target text did not update after filling the input."
                     ),
                 },
             )
 
         except Exception as exc:
-            check = TestCheckResult(
-                name=check_name,
-                status="failed",
-                details={
-                    "reason": "Interaction test raised an exception.",
-                    "exception_type": exc.__class__.__name__,
-                    "exception_message": str(exc),
-                },
-            )
+            return self._build_exception_check(check=check, exc=exc)
 
-        return self._build_result([check])
+    def _build_exception_check(
+        self,
+        *,
+        check: InteractionCheck,
+        exc: Exception,
+    ) -> TestCheckResult:
+        return TestCheckResult(
+            name=check.name,
+            status="failed",
+            details={
+                "kind": check.kind,
+                "reason": "Interaction check raised an exception.",
+                "exception_type": exc.__class__.__name__,
+                "exception_message": str(exc),
+            },
+        )
 
     def _build_result(self, checks: list[TestCheckResult]) -> InteractionTestResult:
         passed_count = sum(check.status == "passed" for check in checks)

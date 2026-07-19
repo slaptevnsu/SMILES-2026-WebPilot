@@ -15,7 +15,34 @@ AgentVariant = Literal[
 ]
 TestStatus = Literal["passed", "failed", "skipped"]
 RepairStatus = Literal["applied", "skipped", "failed"]
+InteractionCheckKind = Literal[
+    "click_increments_text_int",
+    "fill_updates_text",
+]
 
+
+class InteractionCheck(BaseModel):
+    name: str
+    kind: InteractionCheckKind
+    target_selector: str
+    action_selector: str | None = None
+    input_selector: str | None = None
+    value: str | None = None
+    timeout_ms: int = 5000
+    settle_ms: int = 300
+
+    @model_validator(mode="after")
+    def validate_check(self) -> "InteractionCheck":
+        if self.kind == "click_increments_text_int" and self.action_selector is None:
+            raise ValueError("click_increments_text_int checks must define action_selector")
+
+        if self.kind == "fill_updates_text":
+            if self.input_selector is None:
+                raise ValueError("fill_updates_text checks must define input_selector")
+            if self.value is None:
+                raise ValueError("fill_updates_text checks must define value")
+
+        return self
 
 class Task(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
@@ -26,6 +53,7 @@ class Task(BaseModel):
     repo_path: Path | None = None
     max_iterations:int = 1
     metadata: dict[str, Any] = Field(default_factory=dict)
+    interaction_checks: list[InteractionCheck] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def validate_task(self) -> "Task":
