@@ -6,7 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from webpilot.agents import LLMPlanner, LLMReflector, LLMRepairer
+from webpilot.agents import LLMPlanner, LLMReflector, LLMRepairer, LLMTestPlanner
 from webpilot.browser import BrowserExecutor
 from webpilot.repairer import DeterministicRepairer
 from webpilot.schemas import (
@@ -28,7 +28,7 @@ class WebPilotRunner:
         self,
         task_path: Path,
         variant: AgentVariant,
-        max_iterations: int | None = None
+        max_iterations: int | None = None,
     ) -> RunSummary:
         task = self._load_task(task_path)
 
@@ -62,6 +62,13 @@ class WebPilotRunner:
                 task=task,
             )
             final_browser_result = initial_browser_result
+
+            if variant in ["llm-code-only", "llm-browser-feedback"]:
+                LLMTestPlanner().run(
+                    task=task,
+                    repo_path=workspace_repo_path,
+                    run_dir=run_dir,
+                )
 
             repair_variants = [
                 "deterministic-browser-feedback",
@@ -229,7 +236,7 @@ class WebPilotRunner:
                     "Copy the provided buggy frontend repository into a run workspace",
                     "Run the project in a browser",
                     "Collect screenshot, DOM snapshot, console logs, and page errors",
-                    "Run a diagnostic interaction check",
+                    "Run declarative interaction checks from the task specification",
                 ]
             )
         
@@ -246,6 +253,7 @@ class WebPilotRunner:
         elif variant == "llm-code-only":
             steps.extend(
                 [
+                    "Ask an LLM test planner to propose interaction checks from the task and source file",
                     "Ask an LLM planner to produce a concise repair plan from the task and source file",
                     "Ask an LLM repair agent to repair the source code using the task, source file, and repair plan",
                     "Re-run the browser execution after repair",
@@ -256,6 +264,7 @@ class WebPilotRunner:
         elif variant == "llm-browser-feedback":
             steps.extend(
                 [
+                    "Ask an LLM test planner to propose interaction checks from the task and source file",
                     "Ask an LLM planner to produce a concise repair plan from the task and source file",
                     "Ask an LLM reflector to diagnose the failure using browser evidence",
                     "Ask an LLM repair agent to repair the source code using the task, source file, repair plan, diagnosis, and browser feedback",
@@ -298,8 +307,24 @@ class WebPilotRunner:
         elif variant in ["llm-code-only", "llm-browser-feedback"]:
             expected_artifacts.extend(
                 [
+                    "llm_test_proposal/llm_test_proposal_prompt.txt",
+                    "llm_test_proposal/llm_test_proposal_response.txt",
+                    "llm_test_proposal/proposed_interaction_checks.json",
                     "repair_iteration_<n>/llm_plan/llm_plan_prompt.txt",
                     "repair_iteration_<n>/llm_plan/llm_plan_response.txt",
+                ]
+            )
+
+            if variant == "llm-browser-feedback":
+                expected_artifacts.extend(
+                    [
+                        "repair_iteration_<n>/llm_reflection/llm_reflection_prompt.txt",
+                        "repair_iteration_<n>/llm_reflection/llm_reflection_response.txt",
+                    ]
+                )
+
+            expected_artifacts.extend(
+                [
                     "repair_iteration_<n>/llm_repair/llm_prompt.txt",
                     "repair_iteration_<n>/llm_repair/llm_response.txt",
                     "repair_iteration_<n>/llm_repair/repair_plan.json",
@@ -314,14 +339,6 @@ class WebPilotRunner:
                     "repair_iteration_<n>/browser_after/browser_result.json",
                 ]
             )
-
-            if variant == "llm-browser-feedback":
-                expected_artifacts.extend(
-                    [
-                        "repair_iteration_<n>/llm_reflection/llm_reflection_prompt.txt",
-                        "repair_iteration_<n>/llm_reflection/llm_reflection_response.txt",
-                    ]
-                )
                 
         return Plan(
             task_id=task.id,
