@@ -6,7 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from webpilot.agents import LLMRepairer
+from webpilot.agents import LLMPlanner, LLMReflector, LLMRepairer
 from webpilot.browser import BrowserExecutor
 from webpilot.repairer import DeterministicRepairer
 from webpilot.schemas import AgentVariant, BrowserRunResult, Plan, RepairResult, RunSummary, Task
@@ -75,12 +75,28 @@ class WebPilotRunner:
                 else:
                     include_browser_feedback = variant == "llm-browser-feedback"
 
+                    llm_plan = LLMPlanner().run(
+                        task=task,
+                        repo_path=workspace_repo_path,
+                        run_dir=run_dir,
+                    )
+
+                    llm_diagnosis = None
+                    llm_diagnosis = LLMReflector().run(
+                        task=task,
+                        browser_result=initial_browser_result,
+                        run_dir=run_dir,
+                        repo_path=workspace_repo_path,
+                    )
+
                     repair_result = LLMRepairer().run(
                         repo_path=workspace_repo_path,
                         run_dir=run_dir,
                         task=task,
                         browser_result=initial_browser_result,
                         include_browser_feedback=include_browser_feedback,
+                        llm_plan=llm_plan,
+                        llm_diagnosis=llm_diagnosis,
                     )
                     repair_description = "an LLM-generated repair"
 
@@ -186,7 +202,8 @@ class WebPilotRunner:
         elif variant == "llm-code-only":
             steps.extend(
                 [
-                    "Ask an LLM repair agent to repair the source code using only the task instruction and source file",
+                    "Ask an LLM planner to produce a concise repair plan from the task and source file",
+                    "Ask an LLM repair agent to repair the source code using the task, source file, and repair plan",
                     "Re-run the browser execution after repair",
                     "Verify that the repaired project passes the interaction check",
                 ]
@@ -195,8 +212,9 @@ class WebPilotRunner:
         elif variant == "llm-browser-feedback":
             steps.extend(
                 [
-                    "Diagnose failures using collected browser evidence",
-                    "Ask an LLM repair agent to repair the source code using task, source file, and browser feedback",
+                    "Ask an LLM planner to produce a concise repair plan from the task and source file",
+                    "Ask an LLM reflector to diagnose the failure using browser evidence",
+                    "Ask an LLM repair agent to repair the source code using the task, source file, repair plan, diagnosis, and browser feedback",
                     "Re-run the browser execution after repair",
                     "Verify that the repaired project passes the interaction check",
                 ]
@@ -236,6 +254,8 @@ class WebPilotRunner:
         elif variant in ["llm-code-only", "llm-browser-feedback"]:
             expected_artifacts.extend(
                 [
+                    "llm_plan/llm_plan_prompt.txt",
+                    "llm_plan/llm_plan_response.txt",
                     "llm_repair/llm_prompt.txt",
                     "llm_repair/llm_response.txt",
                     "llm_repair/repair_plan.json",
@@ -250,6 +270,14 @@ class WebPilotRunner:
                     "repaired_browser/browser_result.json",
                 ]
             )
+
+            if variant == "llm-browser-feedback":
+                expected_artifacts.extend(
+                    [
+                        "llm_reflection/llm_reflection_prompt.txt",
+                        "llm_reflection/llm_reflection_response.txt",
+                    ]
+                )
 
         return Plan(
             task_id=task.id,

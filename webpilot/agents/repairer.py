@@ -27,6 +27,8 @@ class LLMRepairer:
         run_dir: Path,
         browser_result: BrowserRunResult | None = None,
         include_browser_feedback: bool = False,
+        llm_plan: str | None = None,
+        llm_diagnosis: str | None = None,
     ) -> RepairResult:
         repair_dir = run_dir / "llm_repair"
         repair_dir.mkdir(parents=True, exist_ok=True)
@@ -80,6 +82,8 @@ class LLMRepairer:
             source_code=before_source,
             browser_result=browser_result,
             include_browser_feedback=include_browser_feedback,
+            llm_plan=llm_plan,
+            llm_diagnosis=llm_diagnosis,
         )
 
         Path(artifacts["llm_prompt"]).write_text(
@@ -191,6 +195,8 @@ class LLMRepairer:
         source_code: str,
         browser_result: BrowserRunResult | None,
         include_browser_feedback: bool,
+        llm_plan: str | None,
+        llm_diagnosis: str | None,
     ) -> str:
         sections = [
             "# Task",
@@ -201,6 +207,24 @@ class LLMRepairer:
             source_code,
             "```",
         ]
+
+        if llm_plan:
+            sections.extend(
+                [
+                    "",
+                    "# Repair plan",
+                    llm_plan,
+                ]
+            )
+
+        if llm_diagnosis:
+            sections.extend(
+                [
+                    "",
+                    "# Browser-grounded diagnosis",
+                    llm_diagnosis,
+                ]
+            )
 
         if include_browser_feedback:
             sections.extend(
