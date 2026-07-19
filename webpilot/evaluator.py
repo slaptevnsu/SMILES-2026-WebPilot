@@ -48,7 +48,19 @@ class WebPilotEvaluator:
             records=records,
         )
 
-        self._write_json(output_dir / "evaluation_summary.json", summary.model_dump(mode="json"))
+        self._write_json(
+            output_dir / "evaluation_summary.json",
+            summary.model_dump(mode="json"),
+        )
+        self._write_jsonl(
+            output_dir / "evaluation_records.jsonl",
+            [record.model_dump(mode="json") for record in records],
+        )
+        self._write_markdown_report(
+            output_dir / "evaluation_report.md",
+            summary,
+        )
+
         return summary
 
     def _build_record(self, run_summary: RunSummary) -> EvaluationRunRecord:
@@ -75,3 +87,73 @@ class WebPilotEvaluator:
         with path.open("w", encoding="utf-8") as file:
             json.dump(data, file, indent=2, ensure_ascii=False)
             file.write("\n")
+
+    def _write_jsonl(self, path: Path, rows: list[dict[str, Any]]) -> None:
+        with path.open("w", encoding="utf-8") as file:
+            for row in rows:
+                file.write(json.dumps(row, ensure_ascii=False))
+                file.write("\n")
+
+    def _write_markdown_report(
+        self,
+        path: Path,
+        summary: EvaluationSummary,
+    ) -> None:
+        lines = [
+            "# WebPilot Evaluation Report",
+            "",
+            "## Summary",
+            "",
+            "| Metric | Value |",
+            "|---|---:|",
+            f"| Evaluation ID | `{summary.evaluation_id}` |",
+            f"| Total runs | {summary.total_runs} |",
+            f"| Passed runs | {summary.passed_runs} |",
+            f"| Failed runs | {summary.failed_runs} |",
+            f"| Repaired runs | {summary.repaired_runs} |",
+            "",
+            "## Results",
+            "",
+            "| Task | Variant | Run status | Initial test | Final test | Repair | Passed checks | Failed checks | Run directory |",
+            "|---|---|---|---|---|---|---:|---:|---|",
+        ]
+
+        for record in summary.records:
+            lines.append(
+                "| "
+                f"{record.task_id} | "
+                f"{record.variant} | "
+                f"{record.status} | "
+                f"{self._format_optional(record.initial_test_status)} | "
+                f"{self._format_optional(record.final_test_status)} | "
+                f"{self._format_optional(record.repair_status)} | "
+                f"{record.passed_test_count} | "
+                f"{record.failed_test_count} | "
+                f"`{record.run_dir}` |"
+            )
+
+        lines.extend(
+            [
+                "",
+                "## Interpretation",
+                "",
+                "- `base` runs execute the task without repair and are expected to fail on diagnostic repair tasks.",
+                "- `deterministic-browser-feedback` is a rule-based sanity baseline.",
+                "- `llm-code-only` uses an LLM planner and repairer without passing browser feedback into the repair prompt.",
+                "- `llm-browser-feedback` uses an LLM planner, browser-grounded reflector, and repairer with browser/test evidence.",
+                "",
+                "## Generated artifacts",
+                "",
+                "- `evaluation_summary.json`: full structured evaluation summary.",
+                "- `evaluation_records.jsonl`: one machine-readable record per run.",
+                "- `evaluation_report.md`: this human-readable report.",
+                "",
+            ]
+        )
+
+        path.write_text("\n".join(lines), encoding="utf-8")
+
+    def _format_optional(self, value: Any) -> str:
+        if value is None:
+            return "-"
+        return str(value)
