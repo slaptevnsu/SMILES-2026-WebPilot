@@ -132,15 +132,14 @@ class WebPilotEvaluator:
                 f"`{record.run_dir}` |"
             )
 
+        interpretation_lines = self._build_interpretation_lines(summary)
+
         lines.extend(
             [
                 "",
                 "## Interpretation",
                 "",
-                "- `base` runs execute the task without repair and are expected to fail on diagnostic repair tasks.",
-                "- `deterministic-browser-feedback` is a rule-based sanity baseline.",
-                "- `llm-code-only` uses an LLM planner and repairer without passing browser feedback into the repair prompt.",
-                "- `llm-browser-feedback` uses an LLM planner, browser-grounded reflector, and repairer with browser/test evidence.",
+                *interpretation_lines,
                 "",
                 "## Generated artifacts",
                 "",
@@ -157,3 +156,30 @@ class WebPilotEvaluator:
         if value is None:
             return "-"
         return str(value)
+    
+    def _build_interpretation_lines(self, summary: EvaluationSummary) -> list[str]:
+        variants = {record.variant for record in summary.records}
+
+        lines = []
+
+        if "base" in variants:
+            lines.append(
+                "- `base` runs execute the task without repair and are expected to fail on diagnostic repair tasks."
+            )
+
+        if "deterministic-browser-feedback" in variants:
+            lines.append(
+                "- `deterministic-browser-feedback` is a rule-based sanity baseline."
+            )
+
+        if "llm-code-only" in variants:
+            lines.append(
+                "- `llm-code-only` uses an LLM planner and repairer without passing browser feedback into the repair prompt."
+            )
+
+        if "llm-browser-feedback" in variants:
+            lines.append(
+                "- `llm-browser-feedback` uses an LLM planner, browser-grounded reflector, and repairer with browser/test evidence."
+            )
+
+        return lines
