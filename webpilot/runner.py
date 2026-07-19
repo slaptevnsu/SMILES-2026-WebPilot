@@ -9,7 +9,15 @@ from typing import Any
 from webpilot.agents import LLMPlanner, LLMReflector, LLMRepairer
 from webpilot.browser import BrowserExecutor
 from webpilot.repairer import DeterministicRepairer
-from webpilot.schemas import AgentVariant, BrowserRunResult, Plan, RepairResult, RunSummary, Task
+from webpilot.schemas import (
+    AgentVariant,
+    BrowserRunResult,
+    Plan,
+    RepairIterationRecord,
+    RepairResult,
+    RunSummary,
+    Task,
+)
 
 
 class WebPilotRunner:
@@ -36,6 +44,7 @@ class WebPilotRunner:
         initial_browser_result: BrowserRunResult | None = None
         final_browser_result: BrowserRunResult | None = None
         repair_result: RepairResult | None = None
+        repair_iterations: list[RepairIterationRecord] = []
 
         if task.task_type == "diagnostic_repair":
             if task.repo_path is None:
@@ -60,71 +69,106 @@ class WebPilotRunner:
                 "llm-browser-feedback",
             ]
 
-            initial_run_needs_repair = initial_browser_result.status != "ok"
+            repair_descriptions = {
+                "deterministic-browser-feedback": "a deterministic repair",
+                "llm-code-only": "an LLM-generated code-only repair",
+                "llm-browser-feedback": "an LLM-generated browser-feedback repair",
+            }
 
-            if initial_run_needs_repair and variant in repair_variants:
-                if variant == "deterministic-browser-feedback":
-                    repair_result = DeterministicRepairer().run(
-                        repo_path=workspace_repo_path,
-                        run_dir=run_dir,
-                        task=task,
-                        browser_result=initial_browser_result,
-                    )
-                    repair_description = "a deterministic repair"
+            if variant in repair_variants and final_browser_result.status != "ok":
+                for iteration in range(1, task.max_iterations + 1):
+                    iteration_dir = run_dir / f"repair_iteration_{iteration:02d}"
+                    iteration_dir.mkdir(parents=True, exist_ok=True)
 
-                else:
-                    include_browser_feedback = variant == "llm-browser-feedback"
+                    if variant == "deterministic-browser-feedback":
+                        repair_result = DeterministicRepairer().run(
+                            repo_path=workspace_repo_path,
+                            run_dir=iteration_dir,
+                            task=task,
+                            browser_result=final_browser_result,
+                        )
 
-                    llm_plan = LLMPlanner().run(
-                        task=task,
-                        repo_path=workspace_repo_path,
-                        run_dir=run_dir,
-                    )
+                    else:
+                        include_browser_feedback = variant == "llm-browser-feedback"
 
-                    llm_diagnosis = None
-                    llm_diagnosis = LLMReflector().run(
-                        task=task,
-                        browser_result=initial_browser_result,
-                        run_dir=run_dir,
-                        repo_path=workspace_repo_path,
-                    )
+                        llm_plan = LLMPlanner().run(
+                            task=task,
+                            repo_path=workspace_repo_path,
+                            run_dir=iteration_dir,
+                        )
 
-                    repair_result = LLMRepairer().run(
-                        repo_path=workspace_repo_path,
-                        run_dir=run_dir,
-                        task=task,
-                        browser_result=initial_browser_result,
-                        include_browser_feedback=include_browser_feedback,
-                        llm_plan=llm_plan,
-                        llm_diagnosis=llm_diagnosis,
-                    )
-                    repair_description = "an LLM-generated repair"
+                        llm_diagnosis = None
+                        if include_browser_feedback:
+                            llm_diagnosis = LLMReflector().run(
+                                task=task,
+                                browser_result=final_browser_result,
+                                run_dir=iteration_dir,
+                                repo_path=workspace_repo_path,
+                            )
 
-                if repair_result.status == "applied":
+                        repair_result = LLMRepairer().run(
+                            repo_path=workspace_repo_path,
+                            run_dir=iteration_dir,
+                            task=task,
+                            browser_result=final_browser_result,
+                            include_browser_feedback=include_browser_feedback,
+                            llm_plan=llm_plan,
+                            llm_diagnosis=llm_diagnosis,
+                        )
+
+                    if repair_result.status != "applied":
+                        repair_iterations.append(
+                            RepairIterationRecord(
+                                iteration=iteration,
+                                status="repair_skipped_or_failed",
+                                repair=repair_result,
+                                browser=None,
+                            )
+                        )
+                        break
+
                     final_browser_result = BrowserExecutor().run(
                         repo_path=workspace_repo_path,
-                        run_dir=run_dir / "repaired_browser",
+                        run_dir=iteration_dir / "browser_after",
                         task=task,
+                    )
+
+                    iteration_status = (
+                        "verified"
+                        if final_browser_result.status == "ok"
+                        else "still_failing"
+                    )
+
+                    repair_iterations.append(
+                        RepairIterationRecord(
+                            iteration=iteration,
+                            status=iteration_status,
+                            repair=repair_result,
+                            browser=final_browser_result,
+                        )
                     )
 
                     if final_browser_result.status == "ok":
-                        status = "repaired_and_verified"
-                        message = (
-                            "The initial browser run detected an interaction failure, "
-                            f"{repair_description} was applied, and the repaired app passed browser verification."
-                        )
-                    else:
-                        status = "repair_attempted_with_issues"
-                        message = (
-                            "A repair was applied, but the repaired app still did not pass browser verification."
-                        )
+                        break
+
+                if final_browser_result.status == "ok":
+                    status = "repaired_and_verified"
+                    message = (
+                        "The initial browser run detected a failure, "
+                        f"{repair_descriptions[variant]} was applied, and the repaired app passed browser verification."
+                    )
+                elif repair_result is not None and repair_result.status == "applied":
+                    status = "repair_attempted_with_issues"
+                    message = (
+                        "One or more repair iterations were applied, "
+                        "but the app still did not pass browser verification."
+                    )
                 else:
                     status = "repair_skipped_or_failed"
                     message = (
-                        "The initial browser run detected a failure, "
+                        "The browser run detected a failure, "
                         "but no repair was successfully applied."
                     )
-
             else:
                 status = (
                     "browser_executed"
@@ -135,7 +179,6 @@ class WebPilotRunner:
                     "Task was loaded, the frontend app was launched in a browser, "
                     "browser artifacts were saved, and interaction tests were executed."
                 )
-
         else:
             status = "planned_only"
             message = (
@@ -153,6 +196,7 @@ class WebPilotRunner:
             browser=final_browser_result,
             initial_browser=initial_browser_result,
             repair=repair_result,
+            repair_iterations=repair_iterations,
         )
 
         self._write_json(run_dir / "summary.json", summary.model_dump(mode="json"))
@@ -238,47 +282,47 @@ class WebPilotRunner:
         if variant == "deterministic-browser-feedback":
             expected_artifacts.extend(
                 [
-                    "repair_plan.json",
-                    "patch.diff",
-                    "repaired_browser/npm_install.log",
-                    "repaired_browser/dev_server.log",
-                    "repaired_browser/screenshot.png",
-                    "repaired_browser/dom_snapshot.html",
-                    "repaired_browser/console_logs.json",
-                    "repaired_browser/page_errors.json",
-                    "repaired_browser/test_results.json",
-                    "repaired_browser/browser_result.json",
+                    "repair_iteration_<n>/repair_plan.json",
+                    "repair_iteration_<n>/patch.diff",
+                    "repair_iteration_<n>/browser_after/npm_install.log",
+                    "repair_iteration_<n>/browser_after/dev_server.log",
+                    "repair_iteration_<n>/browser_after/screenshot.png",
+                    "repair_iteration_<n>/browser_after/dom_snapshot.html",
+                    "repair_iteration_<n>/browser_after/console_logs.json",
+                    "repair_iteration_<n>/browser_after/page_errors.json",
+                    "repair_iteration_<n>/browser_after/test_results.json",
+                    "repair_iteration_<n>/browser_after/browser_result.json",
                 ]
             )
 
         elif variant in ["llm-code-only", "llm-browser-feedback"]:
             expected_artifacts.extend(
                 [
-                    "llm_plan/llm_plan_prompt.txt",
-                    "llm_plan/llm_plan_response.txt",
-                    "llm_repair/llm_prompt.txt",
-                    "llm_repair/llm_response.txt",
-                    "llm_repair/repair_plan.json",
-                    "llm_repair/patch.diff",
-                    "repaired_browser/npm_install.log",
-                    "repaired_browser/dev_server.log",
-                    "repaired_browser/screenshot.png",
-                    "repaired_browser/dom_snapshot.html",
-                    "repaired_browser/console_logs.json",
-                    "repaired_browser/page_errors.json",
-                    "repaired_browser/test_results.json",
-                    "repaired_browser/browser_result.json",
+                    "repair_iteration_<n>/llm_plan/llm_plan_prompt.txt",
+                    "repair_iteration_<n>/llm_plan/llm_plan_response.txt",
+                    "repair_iteration_<n>/llm_repair/llm_prompt.txt",
+                    "repair_iteration_<n>/llm_repair/llm_response.txt",
+                    "repair_iteration_<n>/llm_repair/repair_plan.json",
+                    "repair_iteration_<n>/llm_repair/patch.diff",
+                    "repair_iteration_<n>/browser_after/npm_install.log",
+                    "repair_iteration_<n>/browser_after/dev_server.log",
+                    "repair_iteration_<n>/browser_after/screenshot.png",
+                    "repair_iteration_<n>/browser_after/dom_snapshot.html",
+                    "repair_iteration_<n>/browser_after/console_logs.json",
+                    "repair_iteration_<n>/browser_after/page_errors.json",
+                    "repair_iteration_<n>/browser_after/test_results.json",
+                    "repair_iteration_<n>/browser_after/browser_result.json",
                 ]
             )
 
             if variant == "llm-browser-feedback":
                 expected_artifacts.extend(
                     [
-                        "llm_reflection/llm_reflection_prompt.txt",
-                        "llm_reflection/llm_reflection_response.txt",
+                        "repair_iteration_<n>/llm_reflection/llm_reflection_prompt.txt",
+                        "repair_iteration_<n>/llm_reflection/llm_reflection_response.txt",
                     ]
                 )
-
+                
         return Plan(
             task_id=task.id,
             task_type=task.task_type,

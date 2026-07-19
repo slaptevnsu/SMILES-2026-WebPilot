@@ -64,6 +64,7 @@ class RunSummary(BaseModel):
     browser: BrowserRunResult | None = None
     initial_browser: BrowserRunResult | None = None
     repair: RepairResult | None = None
+    repair_iterations: list[RepairIterationRecord] = Field(default_factory=list)
 
 class BrowserRunResult(BaseModel):
     repo_path: str
@@ -97,7 +98,6 @@ class EvaluationRunRecord(BaseModel):
     initial_test_status: TestStatus | None = None
     repair_status: RepairStatus | None = None
 
-
 class EvaluationSummary(BaseModel):
     evaluation_id: str
     output_dir: str
@@ -106,3 +106,9 @@ class EvaluationSummary(BaseModel):
     failed_runs: int
     repaired_runs: int
     records: list[EvaluationRunRecord]
+
+class RepairIterationRecord(BaseModel):
+    iteration: int
+    status: str
+    repair: RepairResult | None = None
+    browser: BrowserRunResult | None = None
