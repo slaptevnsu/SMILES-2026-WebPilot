@@ -1,13 +1,18 @@
 from __future__ import annotations
 
-import difflib
 import json
-import re
 from pathlib import Path
 from typing import Any
 
 from webpilot.llm_client import LLMClient
-from webpilot.project_context import ProjectContextCollector, validate_edit_path
+from webpilot.project_context import ProjectContextCollector
+from webpilot.project_edit import (
+    apply_file_changes,
+    extract_file_changes,
+    parse_llm_json_response,
+    write_changed_files_artifact,
+    write_project_patch,
+)
 from webpilot.schemas import BrowserRunResult, RepairResult, Task
 
 
@@ -120,9 +125,9 @@ class LLMRepairer:
         Path(artifacts["llm_response"]).write_text(raw_response, encoding="utf-8")
 
         try:
-            parsed_response = self._parse_json_response(raw_response)
-            changes = self._extract_changes(parsed_response)
-            applied_changes = self._apply_changes(
+            parsed_response = parse_llm_json_response(raw_response)
+            changes = extract_file_changes(parsed_response)
+            applied_changes = apply_file_changes(
                 repo_path=repo_path,
                 before_by_path=before_by_path,
                 changes=changes,
@@ -136,20 +141,11 @@ class LLMRepairer:
                 include_browser_feedback=include_browser_feedback,
                 changed_paths=[],
             )
-            Path(artifacts["changed_files"]).write_text(
-                json.dumps(
-                    {
-                        "status": "failed",
-                        "error": {
-                            "exception_type": exc.__class__.__name__,
-                            "exception_message": str(exc),
-                        },
-                    },
-                    indent=2,
-                    ensure_ascii=False,
-                )
-                + "\n",
-                encoding="utf-8",
+            write_changed_files_artifact(
+                path=Path(artifacts["changed_files"]),
+                status="failed",
+                applied_changes=[],
+                error=exc,
             )
             return RepairResult(
                 status="failed",
@@ -159,9 +155,9 @@ class LLMRepairer:
             )
 
         if not applied_changes:
-            self._write_patch(
+            write_project_patch(
                 path=Path(artifacts["patch"]),
-                file_diffs=[],
+                applied_changes=[],
             )
             self._write_repair_plan(
                 path=Path(artifacts["repair_plan"]),
@@ -171,18 +167,11 @@ class LLMRepairer:
                 include_browser_feedback=include_browser_feedback,
                 changed_paths=[],
             )
-            Path(artifacts["changed_files"]).write_text(
-                json.dumps(
-                    {
-                        "status": "skipped",
-                        "changed_files": [],
-                        "rationale": parsed_response.get("rationale", ""),
-                    },
-                    indent=2,
-                    ensure_ascii=False,
-                )
-                + "\n",
-                encoding="utf-8",
+            write_changed_files_artifact(
+                path=Path(artifacts["changed_files"]),
+                status="skipped",
+                applied_changes=[],
+                rationale=parsed_response.get("rationale", ""),
             )
             return RepairResult(
                 status="skipped",
@@ -191,44 +180,18 @@ class LLMRepairer:
                 artifacts=artifacts,
             )
 
-        file_diffs = []
-        changed_paths = []
+        changed_paths = [change.path for change in applied_changes]
 
-        for change in applied_changes:
-            changed_paths.append(change["path"])
-            file_diffs.append(
-                {
-                    "path": change["path"],
-                    "before": change["before"],
-                    "after": change["after"],
-                }
-            )
-
-        self._write_patch(
+        write_project_patch(
             path=Path(artifacts["patch"]),
-            file_diffs=file_diffs,
+            applied_changes=applied_changes,
         )
 
-        Path(artifacts["changed_files"]).write_text(
-            json.dumps(
-                {
-                    "status": "applied",
-                    "changed_files": [
-                        {
-                            "path": change["path"],
-                            "operation": change["operation"],
-                            "before_chars": len(change["before"]),
-                            "after_chars": len(change["after"]),
-                        }
-                        for change in applied_changes
-                    ],
-                    "rationale": parsed_response.get("rationale", ""),
-                },
-                indent=2,
-                ensure_ascii=False,
-            )
-            + "\n",
-            encoding="utf-8",
+        write_changed_files_artifact(
+            path=Path(artifacts["changed_files"]),
+            status="applied",
+            applied_changes=applied_changes,
+            rationale=parsed_response.get("rationale", ""),
         )
 
         self._write_repair_plan(
@@ -337,86 +300,6 @@ class LLMRepairer:
 
         return "\n".join(sections)
 
-    def _parse_json_response(self, raw_response: str) -> dict[str, Any]:
-        text = raw_response.strip()
-
-        fenced_match = re.search(r"```(?:json)?\s*(.*?)```", text, re.DOTALL)
-        if fenced_match:
-            text = fenced_match.group(1).strip()
-
-        parsed = json.loads(text)
-
-        if not isinstance(parsed, dict):
-            raise ValueError("LLM response must be a JSON object.")
-
-        return parsed
-
-    def _extract_changes(self, parsed_response: dict[str, Any]) -> list[dict[str, str]]:
-        raw_changes = parsed_response.get("changes")
-
-        if not isinstance(raw_changes, list):
-            raise ValueError("LLM response must contain a list field named 'changes'.")
-
-        changes = []
-
-        for index, raw_change in enumerate(raw_changes):
-            if not isinstance(raw_change, dict):
-                raise ValueError(f"Change at index {index} must be an object.")
-
-            path = raw_change.get("path")
-            content = raw_change.get("content")
-
-            if not isinstance(path, str):
-                raise ValueError(f"Change at index {index} has non-string path.")
-
-            if not isinstance(content, str):
-                raise ValueError(f"Change at index {index} has non-string content.")
-
-            changes.append(
-                {
-                    "path": path,
-                    "content": content.rstrip() + "\n",
-                }
-            )
-
-        return changes
-
-    def _apply_changes(
-        self,
-        *,
-        repo_path: Path,
-        before_by_path: dict[str, str],
-        changes: list[dict[str, str]],
-    ) -> list[dict[str, str]]:
-        applied_changes = []
-
-        for change in changes:
-            relative_path = Path(change["path"]).as_posix()
-            target_path = validate_edit_path(
-                repo_path=repo_path,
-                relative_path=relative_path,
-            )
-
-            before = before_by_path.get(relative_path, "")
-            after = change["content"]
-
-            if before == after:
-                continue
-
-            target_path.parent.mkdir(parents=True, exist_ok=True)
-            target_path.write_text(after, encoding="utf-8")
-
-            applied_changes.append(
-                {
-                    "path": relative_path,
-                    "operation": "modified" if relative_path in before_by_path else "created",
-                    "before": before,
-                    "after": after,
-                }
-            )
-
-        return applied_changes
-
     def _format_test_proposal(self, test_proposal: dict[str, Any]) -> str:
         payload = test_proposal.get("payload", {})
         validation = test_proposal.get("validation", {})
@@ -489,33 +372,6 @@ class LLMRepairer:
             return text[:limit] + "\n\n... truncated ..."
 
         return text
-
-    def _write_patch(
-        self,
-        *,
-        path: Path,
-        file_diffs: list[dict[str, str]],
-    ) -> None:
-        chunks = []
-
-        for file_diff in file_diffs:
-            before = file_diff["before"].splitlines(keepends=True)
-            after = file_diff["after"].splitlines(keepends=True)
-            relative_path = file_diff["path"]
-
-            chunks.extend(
-                difflib.unified_diff(
-                    before,
-                    after,
-                    fromfile=f"a/{relative_path}",
-                    tofile=f"b/{relative_path}",
-                )
-            )
-
-            if chunks and chunks[-1] != "\n":
-                chunks.append("\n")
-
-        path.write_text("".join(chunks), encoding="utf-8")
 
     def _write_repair_plan(
         self,
