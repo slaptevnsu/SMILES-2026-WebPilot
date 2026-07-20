@@ -6,7 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from webpilot.agents import LLMPlanner, LLMReflector, LLMRepairer, LLMTestPlanner
+from webpilot.agents import LLMGenerator, LLMPlanner, LLMReflector, LLMRepairer, LLMTestPlanner
 from webpilot.browser import BrowserExecutor
 from webpilot.repairer import DeterministicRepairer
 from webpilot.schemas import (
@@ -47,7 +47,48 @@ class WebPilotRunner:
         repair_iterations: list[RepairIterationRecord] = []
         test_proposal_result: dict[str, Any] | None = None
 
-        if task.task_type == "diagnostic_repair":
+        if task.task_type == "text_generation":
+            if task.repo_path is None:
+                raise ValueError("text_generation task must define repo_path for the starter app")
+
+            source_repo_path = self._resolve_path(task.repo_path)
+            workspace_repo_path = self._prepare_workspace_repo(
+                source_repo_path=source_repo_path,
+                run_dir=run_dir,
+            )
+
+            repair_result = LLMGenerator().run(
+                task=task,
+                repo_path=workspace_repo_path,
+                run_dir=run_dir,
+            )
+
+            if repair_result.status == "applied":
+                final_browser_result = BrowserExecutor().run(
+                    repo_path=workspace_repo_path,
+                    run_dir=run_dir / "browser_after_generation",
+                    task=task,
+                )
+
+                if final_browser_result.status == "ok":
+                    status = "generated_and_verified"
+                    message = (
+                        "The LLM generated a frontend implementation, "
+                        "the app was launched in a browser, and it passed browser verification."
+                    )
+                else:
+                    status = "generated_with_issues"
+                    message = (
+                        "The LLM generated a frontend implementation, "
+                        "but the generated app did not pass browser verification."
+                    )
+            else:
+                status = "generation_skipped_or_failed"
+                message = (
+                    "The LLM generation step did not produce an applicable project edit."
+                )
+
+        elif task.task_type == "diagnostic_repair":
             if task.repo_path is None:
                 raise ValueError("diagnostic_repair task must define repo_path")
 
@@ -195,11 +236,7 @@ class WebPilotRunner:
                     "browser artifacts were saved, and interaction tests were executed."
                 )
         else:
-            status = "planned_only"
-            message = (
-                "Stage 1 completed: task was loaded, an initial plan was created, "
-                "and artifacts were saved. Browser execution for text_generation is not implemented yet."
-            )
+            raise ValueError(f"Unsupported task type: {task.task_type}")
 
         summary = RunSummary(
             task_id=task.id,
@@ -296,17 +333,42 @@ class WebPilotRunner:
             "plan.json",
             "summary.json",
             "workspace/",
-            "initial_browser/npm_install.log",
-            "initial_browser/dev_server.log",
-            "initial_browser/screenshot.png",
-            "initial_browser/dom_snapshot.html",
-            "initial_browser/console_logs.json",
-            "initial_browser/page_errors.json",
-            "initial_browser/test_results.json",
-            "initial_browser/browser_result.json",
         ]
 
-        if variant == "deterministic-browser-feedback":
+        if task.task_type == "text_generation":
+            expected_artifacts.extend(
+                [
+                    "llm_generation/llm_prompt.txt",
+                    "llm_generation/llm_response.txt",
+                    "llm_generation/generation_plan.json",
+                    "llm_generation/changed_files.json",
+                    "llm_generation/patch.diff",
+                    "browser_after_generation/npm_install.log",
+                    "browser_after_generation/dev_server.log",
+                    "browser_after_generation/screenshot.png",
+                    "browser_after_generation/dom_snapshot.html",
+                    "browser_after_generation/console_logs.json",
+                    "browser_after_generation/page_errors.json",
+                    "browser_after_generation/test_results.json",
+                    "browser_after_generation/browser_result.json",
+                ]
+            )
+
+        elif task.task_type == "diagnostic_repair":
+            expected_artifacts.extend(
+                [
+                    "initial_browser/npm_install.log",
+                    "initial_browser/dev_server.log",
+                    "initial_browser/screenshot.png",
+                    "initial_browser/dom_snapshot.html",
+                    "initial_browser/console_logs.json",
+                    "initial_browser/page_errors.json",
+                    "initial_browser/test_results.json",
+                    "initial_browser/browser_result.json",
+                ]
+            )
+
+        if task.task_type == "diagnostic_repair" and variant == "deterministic-browser-feedback":
             expected_artifacts.extend(
                 [
                     "repair_iteration_<n>/repair_plan.json",
@@ -322,7 +384,7 @@ class WebPilotRunner:
                 ]
             )
 
-        elif variant in ["llm-code-only", "llm-test-synthesis", "llm-browser-feedback"]:
+        elif task.task_type == "diagnostic_repair" and variant in ["llm-code-only", "llm-test-synthesis", "llm-browser-feedback"]:
             if variant in ["llm-test-synthesis", "llm-browser-feedback"]:
                 expected_artifacts.extend(
                     [

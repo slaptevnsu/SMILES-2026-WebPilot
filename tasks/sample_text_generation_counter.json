@@ -1,0 +1,20 @@
+{
+  "id": "sample_text_generation_counter",
+  "type": "text_generation",
+  "repo_path": "examples/blank_react_app",
+  "instruction": "Create a simple React counter app. The page should show the current count starting from 0 and a button that increments the count by 1 when clicked. The displayed count must use data-testid=\"count-value\" and the button must use data-testid=\"increment-button\".",
+  "max_iterations": 1,
+  "interaction_checks": [
+    {
+      "name": "generated counter increments after button click",
+      "kind": "click_increments_text_int",
+      "target_selector": "[data-testid=\"count-value\"]",
+      "action_selector": "[data-testid=\"increment-button\"]"
+    }
+  ],
+  "metadata": {
+    "difficulty": "easy",
+    "source": "manual_mvp",
+    "scenario": "text_generation_counter"
+  }
+}
