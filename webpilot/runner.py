@@ -57,13 +57,14 @@ class WebPilotRunner:
                 run_dir=run_dir,
             )
 
-            repair_result = LLMGenerator().run(
+            generation_result = LLMGenerator().run(
                 task=task,
                 repo_path=workspace_repo_path,
                 run_dir=run_dir,
             )
+            repair_result = generation_result
 
-            if repair_result.status == "applied":
+            if generation_result.status == "applied":
                 final_browser_result = BrowserExecutor().run(
                     repo_path=workspace_repo_path,
                     run_dir=run_dir / "browser_after_generation",
@@ -77,11 +78,88 @@ class WebPilotRunner:
                         "the app was launched in a browser, and it passed browser verification."
                     )
                 else:
-                    status = "generated_with_issues"
-                    message = (
-                        "The LLM generated a frontend implementation, "
-                        "but the generated app did not pass browser verification."
-                    )
+                    for iteration in range(1, task.max_iterations + 1):
+                        iteration_dir = run_dir / f"repair_iteration_{iteration:02d}"
+                        iteration_dir.mkdir(parents=True, exist_ok=True)
+
+                        llm_plan = LLMPlanner().run(
+                            task=task,
+                            repo_path=workspace_repo_path,
+                            run_dir=iteration_dir,
+                        )
+
+                        llm_diagnosis = LLMReflector().run(
+                            task=task,
+                            browser_result=final_browser_result,
+                            run_dir=iteration_dir,
+                            repo_path=workspace_repo_path,
+                        )
+
+                        repair_result = LLMRepairer().run(
+                            repo_path=workspace_repo_path,
+                            run_dir=iteration_dir,
+                            task=task,
+                            browser_result=final_browser_result,
+                            include_browser_feedback=True,
+                            llm_plan=llm_plan,
+                            llm_diagnosis=llm_diagnosis,
+                            test_proposal=None,
+                        )
+
+                        if repair_result.status != "applied":
+                            repair_iterations.append(
+                                RepairIterationRecord(
+                                    iteration=iteration,
+                                    status="repair_skipped_or_failed",
+                                    repair=repair_result,
+                                    browser=None,
+                                )
+                            )
+                            break
+
+                        final_browser_result = BrowserExecutor().run(
+                            repo_path=workspace_repo_path,
+                            run_dir=iteration_dir / "browser_after",
+                            task=task,
+                        )
+
+                        iteration_status = (
+                            "verified"
+                            if final_browser_result.status == "ok"
+                            else "still_failing"
+                        )
+
+                        repair_iterations.append(
+                            RepairIterationRecord(
+                                iteration=iteration,
+                                status=iteration_status,
+                                repair=repair_result,
+                                browser=final_browser_result,
+                            )
+                        )
+
+                        if final_browser_result.status == "ok":
+                            break
+
+                    if final_browser_result.status == "ok":
+                        status = "generated_repaired_and_verified"
+                        message = (
+                            "The initial generated app failed browser verification, "
+                            "but a browser-feedback repair was applied and the app passed verification."
+                        )
+                    elif repair_result is not None and repair_result.status == "applied":
+                        status = "generation_repair_attempted_with_issues"
+                        message = (
+                            "The generated app failed browser verification. "
+                            "One or more browser-feedback repairs were applied, "
+                            "but the app still did not pass verification."
+                        )
+                    else:
+                        status = "generation_repair_skipped_or_failed"
+                        message = (
+                            "The generated app failed browser verification, "
+                            "and no browser-feedback repair was successfully applied."
+                        )
             else:
                 status = "generation_skipped_or_failed"
                 message = (
@@ -273,6 +351,7 @@ class WebPilotRunner:
                     "Run the generated project in a browser",
                     "Collect screenshot, DOM snapshot, console logs, and page errors",
                     "Run basic interaction checks",
+                    "If verification fails, run the same repair iteration loop used for diagnostic repair",
                 ]
             )
         elif task.task_type == "diagnostic_repair":
@@ -351,6 +430,23 @@ class WebPilotRunner:
                     "browser_after_generation/page_errors.json",
                     "browser_after_generation/test_results.json",
                     "browser_after_generation/browser_result.json",
+                    "repair_iteration_<n>/llm_plan/llm_plan_prompt.txt",
+                    "repair_iteration_<n>/llm_plan/llm_plan_response.txt",
+                    "repair_iteration_<n>/llm_reflection/llm_reflection_prompt.txt",
+                    "repair_iteration_<n>/llm_reflection/llm_reflection_response.txt",
+                    "repair_iteration_<n>/llm_repair/llm_prompt.txt",
+                    "repair_iteration_<n>/llm_repair/llm_response.txt",
+                    "repair_iteration_<n>/llm_repair/repair_plan.json",
+                    "repair_iteration_<n>/llm_repair/changed_files.json",
+                    "repair_iteration_<n>/llm_repair/patch.diff",
+                    "repair_iteration_<n>/browser_after/npm_install.log",
+                    "repair_iteration_<n>/browser_after/dev_server.log",
+                    "repair_iteration_<n>/browser_after/screenshot.png",
+                    "repair_iteration_<n>/browser_after/dom_snapshot.html",
+                    "repair_iteration_<n>/browser_after/console_logs.json",
+                    "repair_iteration_<n>/browser_after/page_errors.json",
+                    "repair_iteration_<n>/browser_after/test_results.json",
+                    "repair_iteration_<n>/browser_after/browser_result.json",
                 ]
             )
 

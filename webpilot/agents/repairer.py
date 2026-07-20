@@ -47,18 +47,18 @@ class LLMRepairer:
             "changed_files": str(repair_dir / "changed_files.json"),
         }
 
-        if task.task_type != "diagnostic_repair":
+        if task.task_type not in ["diagnostic_repair", "text_generation"]:
             self._write_repair_plan(
                 path=Path(artifacts["repair_plan"]),
                 status="skipped",
-                reason="LLMRepairer currently supports only diagnostic_repair tasks.",
+                reason="LLMRepairer currently supports only diagnostic_repair and text_generation tasks.",
                 task=task,
                 include_browser_feedback=include_browser_feedback,
                 changed_paths=[],
             )
             return RepairResult(
                 status="skipped",
-                reason="LLMRepairer currently supports only diagnostic_repair tasks.",
+                reason="LLMRepairer currently supports only diagnostic_repair and text_generation tasks.",
                 target_file=None,
                 artifacts=artifacts,
             )
