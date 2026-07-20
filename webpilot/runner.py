@@ -352,6 +352,7 @@ class WebPilotRunner:
                     "repair_iteration_<n>/llm_repair/llm_prompt.txt",
                     "repair_iteration_<n>/llm_repair/llm_response.txt",
                     "repair_iteration_<n>/llm_repair/repair_plan.json",
+                    "repair_iteration_<n>/llm_repair/changed_files.json",
                     "repair_iteration_<n>/llm_repair/patch.diff",
                     "repair_iteration_<n>/browser_after/npm_install.log",
                     "repair_iteration_<n>/browser_after/dev_server.log",

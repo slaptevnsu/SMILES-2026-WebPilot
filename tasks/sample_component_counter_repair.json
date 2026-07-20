@@ -1,0 +1,20 @@
+{
+  "id": "sample_component_counter_repair",
+  "type": "diagnostic_repair",
+  "repo_path": "examples/buggy_component_counter",
+  "instruction": "The counter button is rendered by a child component, but clicking it does not increase the displayed count. Fix the issue.",
+  "max_iterations": 2,
+  "interaction_checks": [
+    {
+      "name": "component counter increments after button click",
+      "kind": "click_increments_text_int",
+      "target_selector": "[data-testid=\"count-value\"]",
+      "action_selector": "[data-testid=\"increment-button\"]"
+    }
+  ],
+  "metadata": {
+    "difficulty": "easy",
+    "source": "manual_mvp",
+    "bug_location": "src/components/CounterControls.jsx"
+  }
+}
