@@ -177,6 +177,11 @@ class WebPilotEvaluator:
                 "- `llm-code-only` uses an LLM planner and repairer without passing browser feedback into the repair prompt."
             )
 
+        if "llm-test-synthesis" in variants:
+            lines.append(
+                "- `llm-test-synthesis` uses an LLM test planner to propose interaction checks and passes them as additional repair context. Final evaluation still uses oracle checks from the task specification."
+            )
+
         if "llm-browser-feedback" in variants:
             lines.append(
                 "- `llm-browser-feedback` uses an LLM planner, browser-grounded reflector, and repairer with browser/test evidence."

@@ -45,6 +45,7 @@ class WebPilotRunner:
         final_browser_result: BrowserRunResult | None = None
         repair_result: RepairResult | None = None
         repair_iterations: list[RepairIterationRecord] = []
+        test_proposal_result: dict[str, Any] | None = None
 
         if task.task_type == "diagnostic_repair":
             if task.repo_path is None:
@@ -63,8 +64,8 @@ class WebPilotRunner:
             )
             final_browser_result = initial_browser_result
 
-            if variant in ["llm-code-only", "llm-browser-feedback"]:
-                LLMTestPlanner().run(
+            if variant in ["llm-test-synthesis", "llm-browser-feedback"]:
+                test_proposal_result = LLMTestPlanner().run(
                     task=task,
                     repo_path=workspace_repo_path,
                     run_dir=run_dir,
@@ -73,12 +74,14 @@ class WebPilotRunner:
             repair_variants = [
                 "deterministic-browser-feedback",
                 "llm-code-only",
+                "llm-test-synthesis",
                 "llm-browser-feedback",
             ]
 
             repair_descriptions = {
                 "deterministic-browser-feedback": "a deterministic repair",
                 "llm-code-only": "an LLM-generated code-only repair",
+                "llm-test-synthesis": "an LLM-generated test-synthesis repair",
                 "llm-browser-feedback": "an LLM-generated browser-feedback repair",
             }
 
@@ -121,6 +124,11 @@ class WebPilotRunner:
                             include_browser_feedback=include_browser_feedback,
                             llm_plan=llm_plan,
                             llm_diagnosis=llm_diagnosis,
+                            test_proposal=(
+                                test_proposal_result
+                                if variant in ["llm-test-synthesis", "llm-browser-feedback"]
+                                else None
+                            ),
                         )
 
                     if repair_result.status != "applied":
@@ -253,11 +261,21 @@ class WebPilotRunner:
         elif variant == "llm-code-only":
             steps.extend(
                 [
-                    "Ask an LLM test planner to propose interaction checks from the task and source file",
                     "Ask an LLM planner to produce a concise repair plan from the task and source file",
                     "Ask an LLM repair agent to repair the source code using the task, source file, and repair plan",
                     "Re-run the browser execution after repair",
-                    "Verify that the repaired project passes the interaction check",
+                    "Verify that the repaired project passes the oracle interaction checks from the task specification",
+                ]
+            )
+
+        elif variant == "llm-test-synthesis":
+            steps.extend(
+                [
+                    "Ask an LLM test planner to propose interaction checks from the task and source file",
+                    "Ask an LLM planner to produce a concise repair plan from the task and source file",
+                    "Ask an LLM repair agent to repair the source code using the task, source file, repair plan, and proposed interaction checks",
+                    "Re-run the browser execution after repair",
+                    "Verify that the repaired project passes the oracle interaction checks from the task specification",
                 ]
             )
 
@@ -304,12 +322,18 @@ class WebPilotRunner:
                 ]
             )
 
-        elif variant in ["llm-code-only", "llm-browser-feedback"]:
+        elif variant in ["llm-code-only", "llm-test-synthesis", "llm-browser-feedback"]:
+            if variant in ["llm-test-synthesis", "llm-browser-feedback"]:
+                expected_artifacts.extend(
+                    [
+                        "llm_test_proposal/llm_test_proposal_prompt.txt",
+                        "llm_test_proposal/llm_test_proposal_response.txt",
+                        "llm_test_proposal/proposed_interaction_checks.json",
+                    ]
+                )
+
             expected_artifacts.extend(
                 [
-                    "llm_test_proposal/llm_test_proposal_prompt.txt",
-                    "llm_test_proposal/llm_test_proposal_response.txt",
-                    "llm_test_proposal/proposed_interaction_checks.json",
                     "repair_iteration_<n>/llm_plan/llm_plan_prompt.txt",
                     "repair_iteration_<n>/llm_plan/llm_plan_response.txt",
                 ]

@@ -12,6 +12,7 @@ AgentVariant = Literal[
     "deterministic-browser-feedback",
     "llm-code-only",
     "llm-browser-feedback",
+    "llm-test-synthesis",
 ]
 TestStatus = Literal["passed", "failed", "skipped"]
 RepairStatus = Literal["applied", "skipped", "failed"]

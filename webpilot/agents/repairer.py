@@ -29,6 +29,7 @@ class LLMRepairer:
         include_browser_feedback: bool = False,
         llm_plan: str | None = None,
         llm_diagnosis: str | None = None,
+        test_proposal: dict[str, Any] | None = None,
     ) -> RepairResult:
         repair_dir = run_dir / "llm_repair"
         repair_dir.mkdir(parents=True, exist_ok=True)
@@ -84,6 +85,7 @@ class LLMRepairer:
             include_browser_feedback=include_browser_feedback,
             llm_plan=llm_plan,
             llm_diagnosis=llm_diagnosis,
+            test_proposal=test_proposal,
         )
 
         Path(artifacts["llm_prompt"]).write_text(
@@ -197,6 +199,7 @@ class LLMRepairer:
         include_browser_feedback: bool,
         llm_plan: str | None,
         llm_diagnosis: str | None,
+        test_proposal: dict[str, Any] | None,
     ) -> str:
         sections = [
             "# Task",
@@ -214,6 +217,15 @@ class LLMRepairer:
                     "",
                     "# Repair plan",
                     llm_plan,
+                ]
+            )
+
+        if test_proposal:
+            sections.extend(
+                [
+                    "",
+                    "# Proposed interaction checks",
+                    self._format_test_proposal(test_proposal),
                 ]
             )
 
@@ -244,6 +256,24 @@ class LLMRepairer:
         )
 
         return "\n".join(sections)
+
+    def _format_test_proposal(self, test_proposal: dict[str, Any]) -> str:
+        payload = test_proposal.get("payload", {})
+        validation = test_proposal.get("validation", {})
+
+        formatted = {
+            "status": test_proposal.get("status"),
+            "rationale": payload.get("rationale"),
+            "proposed_interaction_checks": payload.get("proposed_interaction_checks", []),
+            "valid_interaction_checks": validation.get("valid_interaction_checks", []),
+            "invalid_check_count": validation.get("invalid_check_count"),
+        }
+
+        return json.dumps(
+            formatted,
+            indent=2,
+            ensure_ascii=False,
+        )[:MAX_TEXT_ARTIFACT_CHARS]
 
     def _format_browser_feedback(
         self,

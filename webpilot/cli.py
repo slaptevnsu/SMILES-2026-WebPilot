@@ -15,6 +15,7 @@ AGENT_VARIANT_CHOICES = [
     "deterministic-browser-feedback",
     "llm-code-only",
     "llm-browser-feedback",
+    "llm-test-synthesis",
 ]
 
 
