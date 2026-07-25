@@ -59,7 +59,6 @@ class LLMRepairer:
             return RepairResult(
                 status="skipped",
                 reason="LLMRepairer currently supports only diagnostic_repair and text_generation tasks.",
-                target_file=None,
                 artifacts=artifacts,
             )
 
@@ -78,7 +77,6 @@ class LLMRepairer:
             return RepairResult(
                 status="failed",
                 reason="No editable frontend project files were found.",
-                target_file=None,
                 artifacts=artifacts,
             )
 
@@ -118,7 +116,6 @@ class LLMRepairer:
             return RepairResult(
                 status="failed",
                 reason=f"LLM call failed: {exc}",
-                target_file=None,
                 artifacts=artifacts,
             )
 
@@ -150,7 +147,6 @@ class LLMRepairer:
             return RepairResult(
                 status="failed",
                 reason=f"Failed to parse or apply LLM file changes: {exc}",
-                target_file=None,
                 artifacts=artifacts,
             )
 
@@ -176,7 +172,6 @@ class LLMRepairer:
             return RepairResult(
                 status="skipped",
                 reason="LLM returned no effective file changes.",
-                target_file=None,
                 artifacts=artifacts,
             )
 
@@ -206,7 +201,7 @@ class LLMRepairer:
         return RepairResult(
             status="applied",
             reason="Applied LLM-generated multi-file repair candidate.",
-            target_file=", ".join(changed_paths),
+            changed_files=changed_paths,
             artifacts=artifacts,
         )
 

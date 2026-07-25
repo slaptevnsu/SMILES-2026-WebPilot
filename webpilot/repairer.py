@@ -27,7 +27,6 @@ class DeterministicRepairer:
             result = RepairResult(
                 status="skipped",
                 reason="Repair is only implemented for diagnostic_repair tasks.",
-                target_file=None,
                 artifacts=artifacts,
             )
             self._write_result(run_dir, result)
@@ -37,7 +36,6 @@ class DeterministicRepairer:
             result = RepairResult(
                 status="failed",
                 reason=f"Target file was not found: {target_file}",
-                target_file=str(target_file),
                 artifacts=artifacts,
             )
             self._write_result(run_dir, result)
@@ -57,7 +55,6 @@ class DeterministicRepairer:
             result = RepairResult(
                 status="skipped",
                 reason="No deterministic repair rule matched the observed failure.",
-                target_file=None,
                 artifacts=artifacts,
             )
             self._write_result(run_dir, result)
@@ -67,7 +64,6 @@ class DeterministicRepairer:
             result = RepairResult(
                 status="failed",
                 reason="A repair rule matched the failure, but no source-code change was produced.",
-                target_file=str(target_file),
                 artifacts=artifacts,
             )
             self._write_result(run_dir, result)
@@ -85,7 +81,7 @@ class DeterministicRepairer:
         result = RepairResult(
             status="applied",
             reason=repair_reason,
-            target_file=str(target_file),
+            changed_files=["src/App.jsx"],
             artifacts=artifacts,
         )
         self._write_result(run_dir, result)

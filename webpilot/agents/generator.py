@@ -49,7 +49,6 @@ class LLMGenerator:
             return RepairResult(
                 status="skipped",
                 reason="LLMGenerator currently supports only text_generation tasks.",
-                target_file=None,
                 artifacts=artifacts,
             )
 
@@ -67,7 +66,6 @@ class LLMGenerator:
             return RepairResult(
                 status="failed",
                 reason="No editable frontend project files were found.",
-                target_file=None,
                 artifacts=artifacts,
             )
 
@@ -101,7 +99,6 @@ class LLMGenerator:
             return RepairResult(
                 status="failed",
                 reason=f"LLM call failed: {exc}",
-                target_file=None,
                 artifacts=artifacts,
             )
 
@@ -132,7 +129,6 @@ class LLMGenerator:
             return RepairResult(
                 status="failed",
                 reason=f"Failed to parse or apply LLM file changes: {exc}",
-                target_file=None,
                 artifacts=artifacts,
             )
 
@@ -157,7 +153,6 @@ class LLMGenerator:
             return RepairResult(
                 status="skipped",
                 reason="LLM returned no effective file changes.",
-                target_file=None,
                 artifacts=artifacts,
             )
 
@@ -186,7 +181,7 @@ class LLMGenerator:
         return RepairResult(
             status="applied",
             reason="Applied LLM-generated frontend implementation.",
-            target_file=", ".join(changed_paths),
+            changed_files=changed_paths,
             artifacts=artifacts,
         )
 

@@ -110,7 +110,7 @@ class BrowserRunResult(BaseModel):
 class RepairResult(BaseModel):
     status: RepairStatus
     reason: str
-    target_file: str | None = None
+    changed_files: list[str] = Field(default_factory=list)
     artifacts: dict[str, str] = Field(default_factory=dict)
 
 class EvaluationRunRecord(BaseModel):
