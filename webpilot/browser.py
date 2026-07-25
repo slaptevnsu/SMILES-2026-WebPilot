@@ -141,15 +141,33 @@ class BrowserExecutor:
 
     def _run_npm_install(self, repo_path: Path, log_path: Path) -> subprocess.CompletedProcess[str]:
         with log_path.open("w", encoding="utf-8") as log_file:
-            return subprocess.run(
-                ["npm", "install"],
-                cwd=repo_path,
-                stdout=log_file,
-                stderr=subprocess.STDOUT,
-                text=True,
-                timeout=120,
-                check=False,
-            )
+            try:
+                return subprocess.run(
+                    [
+                        "npm",
+                        "install",
+                        "--no-audit",
+                        "--no-fund",
+                        "--prefer-offline",
+                    ],
+                    cwd=repo_path,
+                    stdout=log_file,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    timeout=120,
+                    check=False,
+                )
+            except subprocess.TimeoutExpired as exc:
+                log_file.write("\n")
+                log_file.write("npm install timed out after 120 seconds.\n")
+                log_file.write(f"Command: {exc.cmd}\n")
+
+                return subprocess.CompletedProcess(
+                    args=exc.cmd,
+                    returncode=124,
+                    stdout="",
+                    stderr="npm install timed out after 120 seconds.",
+                )
 
     def _start_dev_server(
         self,
