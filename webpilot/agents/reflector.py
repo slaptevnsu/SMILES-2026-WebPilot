@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from webpilot.llm_client import LLMClient
+from webpilot.project_context import ProjectContextCollector
 from webpilot.schemas import BrowserRunResult, Task
 
 
@@ -27,17 +28,18 @@ class LLMReflector:
         reflection_dir = run_dir / "llm_reflection"
         reflection_dir.mkdir(parents=True, exist_ok=True)
 
-        source_code = None
+        project_context = None
         if repo_path is not None:
-            target_file = repo_path / "src" / "App.jsx"
-            if target_file.exists():
-                source_code = target_file.read_text(encoding="utf-8")
+            collector = ProjectContextCollector()
+            project_files = collector.collect(repo_path=repo_path)
+            if project_files:
+                project_context = collector.format_for_prompt(project_files)
 
         system_prompt = self._build_system_prompt()
         user_prompt = self._build_user_prompt(
             task=task,
             browser_result=browser_result,
-            source_code=source_code,
+            project_context=project_context,
         )
 
         (reflection_dir / "llm_reflection_prompt.txt").write_text(
@@ -71,21 +73,19 @@ class LLMReflector:
             *,
             task: Task,
             browser_result: BrowserRunResult,
-            source_code: str | None,
+            project_context: str | None,
         ) -> str:
         sections = [
             "# Task",
             task.instruction,
         ]
 
-        if source_code is not None:
+        if project_context is not None:
             sections.extend(
                 [
                     "",
-                    "# Current src/App.jsx",
-                    "```jsx",
-                    source_code,
-                    "```",
+                    "# Editable project files",
+                    project_context,
                 ]
             )
 

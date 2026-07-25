@@ -8,6 +8,7 @@ from typing import Any
 from pydantic import ValidationError
 
 from webpilot.llm_client import LLMClient
+from webpilot.project_context import ProjectContextCollector
 from webpilot.schemas import InteractionCheck, Task
 
 
@@ -30,17 +31,18 @@ class LLMTestPlanner:
         response_path = proposal_dir / "llm_test_proposal_response.txt"
         parsed_path = proposal_dir / "proposed_interaction_checks.json"
 
-        target_file = repo_path / "src" / "App.jsx"
-        source_code = (
-            target_file.read_text(encoding="utf-8")
-            if target_file.exists()
-            else "src/App.jsx was not found."
+        collector = ProjectContextCollector()
+        project_files = collector.collect(repo_path=repo_path)
+        project_context = (
+            collector.format_for_prompt(project_files)
+            if project_files
+            else "No editable frontend project files were found."
         )
 
         system_prompt = self._build_system_prompt()
         user_prompt = self._build_user_prompt(
             task=task,
-            source_code=source_code,
+            project_context=project_context,
             llm_diagnosis=llm_diagnosis,
         )
 
@@ -104,7 +106,7 @@ class LLMTestPlanner:
         self,
         *,
         task: Task,
-        source_code: str,
+        project_context: str,
         llm_diagnosis: str | None,
     ) -> str:
         diagnosis_section = (
@@ -122,10 +124,8 @@ class LLMTestPlanner:
                 "# Task instruction",
                 task.instruction,
                 "",
-                "# Current src/App.jsx",
-                "```jsx",
-                source_code,
-                "```",
+                "# Editable project files",
+                project_context,
                 *diagnosis_section,
                 "",
                 "# Supported interaction check kinds",
@@ -167,7 +167,7 @@ class LLMTestPlanner:
                 '  "rationale": "brief explanation of why these checks match the task"',
                 "}",
                 "",
-                "Prefer stable selectors such as data-testid when they are present in the source code.",
+                "Prefer stable selectors such as data-testid when they are present in the project files.",
                 "Do not invent unsupported check kinds.",
             ]
         )
