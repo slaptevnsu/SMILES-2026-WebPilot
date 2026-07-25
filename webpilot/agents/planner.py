@@ -16,6 +16,7 @@ class LLMPlanner:
         task: Task,
         repo_path: Path,
         run_dir: Path,
+        llm_diagnosis: str | None = None,
     ) -> str:
         plan_dir = run_dir / "llm_plan"
         plan_dir.mkdir(parents=True, exist_ok=True)
@@ -32,6 +33,7 @@ class LLMPlanner:
             task=task,
             source_code=source_code,
             target_file=target_file,
+            llm_diagnosis=llm_diagnosis,
         )
 
         (plan_dir / "llm_plan_prompt.txt").write_text(
@@ -66,7 +68,18 @@ class LLMPlanner:
         task: Task,
         source_code: str,
         target_file: Path,
+        llm_diagnosis: str | None,
     ) -> str:
+        diagnosis_section = (
+            [
+                "",
+                "# Browser-grounded diagnosis",
+                llm_diagnosis,
+            ]
+            if llm_diagnosis
+            else []
+        )
+
         return "\n".join(
             [
                 "# Task",
@@ -79,6 +92,7 @@ class LLMPlanner:
                 "```jsx",
                 source_code,
                 "```",
+                *diagnosis_section,
                 "",
                 "# Required output",
                 "Return a concise numbered repair plan. Do not return code.",

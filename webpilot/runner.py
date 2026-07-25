@@ -244,7 +244,7 @@ class WebPilotRunner:
         workspace_repo_path: Path,
         run_dir: Path,
     ) -> dict[str, Any] | None:
-        if variant not in TEST_SYNTHESIS_VARIANTS:
+        if variant != "llm-test-synthesis":
             return None
 
         return LLMTestPlanner().run(
@@ -284,12 +284,6 @@ class WebPilotRunner:
             else:
                 include_browser_feedback = variant == "llm-browser-feedback"
 
-                llm_plan = LLMPlanner().run(
-                    task=task,
-                    repo_path=workspace_repo_path,
-                    run_dir=iteration_dir,
-                )
-
                 llm_diagnosis = None
                 if include_browser_feedback:
                     llm_diagnosis = LLMReflector().run(
@@ -298,6 +292,22 @@ class WebPilotRunner:
                         run_dir=iteration_dir,
                         repo_path=workspace_repo_path,
                     )
+
+                iteration_test_proposal_result = test_proposal_result
+                if variant == "llm-browser-feedback":
+                    iteration_test_proposal_result = LLMTestPlanner().run(
+                        task=task,
+                        repo_path=workspace_repo_path,
+                        run_dir=iteration_dir,
+                        llm_diagnosis=llm_diagnosis,
+                    )
+
+                llm_plan = LLMPlanner().run(
+                    task=task,
+                    repo_path=workspace_repo_path,
+                    run_dir=iteration_dir,
+                    llm_diagnosis=llm_diagnosis,
+                )
 
                 repair_result = LLMRepairer().run(
                     repo_path=workspace_repo_path,
@@ -308,7 +318,7 @@ class WebPilotRunner:
                     llm_plan=llm_plan,
                     llm_diagnosis=llm_diagnosis,
                     test_proposal=(
-                        test_proposal_result
+                        iteration_test_proposal_result
                         if variant in TEST_SYNTHESIS_VARIANTS
                         else None
                     ),

@@ -21,6 +21,7 @@ class LLMTestPlanner:
         task: Task,
         repo_path: Path,
         run_dir: Path,
+        llm_diagnosis: str | None = None,
     ) -> dict[str, Any]:
         proposal_dir = run_dir / "llm_test_proposal"
         proposal_dir.mkdir(parents=True, exist_ok=True)
@@ -40,6 +41,7 @@ class LLMTestPlanner:
         user_prompt = self._build_user_prompt(
             task=task,
             source_code=source_code,
+            llm_diagnosis=llm_diagnosis,
         )
 
         prompt_path.write_text(
@@ -103,7 +105,18 @@ class LLMTestPlanner:
         *,
         task: Task,
         source_code: str,
+        llm_diagnosis: str | None,
     ) -> str:
+        diagnosis_section = (
+            [
+                "",
+                "# Browser-grounded diagnosis",
+                llm_diagnosis,
+            ]
+            if llm_diagnosis
+            else []
+        )
+
         return "\n".join(
             [
                 "# Task instruction",
@@ -113,6 +126,7 @@ class LLMTestPlanner:
                 "```jsx",
                 source_code,
                 "```",
+                *diagnosis_section,
                 "",
                 "# Supported interaction check kinds",
                 "",
