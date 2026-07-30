@@ -38,6 +38,9 @@ class InteractionTester:
         if check.kind == "fill_updates_text":
             return self._test_fill_updates_text(page=page, check=check)
 
+        if check.kind in {"click_reveals_text", "tabs_switch_content"}:
+            return self._test_click_reveals_visible_target(page=page, check=check)
+
         return TestCheckResult(
             name=check.name,
             status="skipped",
@@ -134,6 +137,67 @@ class InteractionTester:
                         if passed
                         else "Target text did not update after filling the input."
                     ),
+                },
+            )
+
+        except Exception as exc:
+            return self._build_exception_check(check=check, exc=exc)
+
+    def _test_click_reveals_visible_target(
+        self,
+        *,
+        page: Page,
+        check: InteractionCheck,
+    ) -> TestCheckResult:
+        try:
+            if check.action_selector is None:
+                raise ValueError(f"action_selector is required for {check.kind}")
+
+            action_locator = page.locator(check.action_selector)
+            target_locator = page.locator(check.target_selector)
+
+            before_visible = target_locator.is_visible(timeout=check.timeout_ms)
+            before_text = (
+                target_locator.inner_text(timeout=check.timeout_ms).strip()
+                if before_visible
+                else ""
+            )
+
+            action_locator.click(timeout=check.timeout_ms)
+            page.wait_for_timeout(check.settle_ms)
+
+            after_visible = target_locator.is_visible(timeout=check.timeout_ms)
+            after_text = (
+                target_locator.inner_text(timeout=check.timeout_ms).strip()
+                if after_visible
+                else ""
+            )
+
+            target_text_found = (
+                True if check.target_text is None else check.target_text in after_text
+            )
+            passed = after_visible and target_text_found
+
+            if passed:
+                reason = "Target became visible after the click."
+            elif not after_visible:
+                reason = "Target did not become visible after the click."
+            else:
+                reason = "Target became visible, but expected text was not found."
+
+            return TestCheckResult(
+                name=check.name,
+                status="passed" if passed else "failed",
+                details={
+                    "kind": check.kind,
+                    "action_selector": check.action_selector,
+                    "target_selector": check.target_selector,
+                    "target_text": check.target_text,
+                    "before_visible": before_visible,
+                    "after_visible": after_visible,
+                    "before_text": before_text,
+                    "after_text": after_text,
+                    "reason": reason,
                 },
             )
 

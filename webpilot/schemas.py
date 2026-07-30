@@ -19,6 +19,8 @@ RepairStatus = Literal["applied", "skipped", "failed"]
 InteractionCheckKind = Literal[
     "click_increments_text_int",
     "fill_updates_text",
+    "click_reveals_text",
+    "tabs_switch_content",
 ]
 
 
@@ -29,6 +31,7 @@ class InteractionCheck(BaseModel):
     action_selector: str | None = None
     input_selector: str | None = None
     value: str | None = None
+    target_text: str | None = None
     timeout_ms: int = 5000
     settle_ms: int = 300
 
@@ -42,6 +45,15 @@ class InteractionCheck(BaseModel):
                 raise ValueError("fill_updates_text checks must define input_selector")
             if self.value is None:
                 raise ValueError("fill_updates_text checks must define value")
+
+        if self.kind == "click_reveals_text":
+            if self.action_selector is None:
+                raise ValueError("click_reveals_text checks must define action_selector")
+            if self.target_text is None:
+                raise ValueError("click_reveals_text checks must define target_text")
+
+        if self.kind == "tabs_switch_content" and self.action_selector is None:
+            raise ValueError("tabs_switch_content checks must define action_selector")
 
         return self
 
