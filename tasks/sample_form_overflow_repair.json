@@ -1,0 +1,39 @@
+{
+  "id": "sample_form_overflow_repair",
+  "type": "diagnostic_repair",
+  "repo_path": "examples/buggy_repair_app",
+  "instruction": "Diagnose and repair the landing page. The CTA button should show visible feedback when clicked, the contact form should include name, email, and message fields, submitting the contact form should show visible feedback, and the page should not have horizontal overflow on a mobile viewport.",
+  "max_iterations": 2,
+  "interaction_checks": [
+    {
+      "name": "message textarea exists",
+      "kind": "selector_exists",
+      "target_selector": "textarea[name=\"message\"]"
+    },
+    {
+      "name": "cta click shows planning feedback",
+      "kind": "click_reveals_text",
+      "action_selector": ".hero-section button",
+      "target_selector": ".hero-section",
+      "target_text": "Planning started"
+    },
+    {
+      "name": "form submit shows feedback",
+      "kind": "click_reveals_text",
+      "action_selector": ".contact-form button[type=\"submit\"]",
+      "target_selector": ".contact-section",
+      "target_text": "Message sent"
+    },
+    {
+      "name": "mobile viewport has no horizontal overflow",
+      "kind": "no_mobile_horizontal_overflow",
+      "target_selector": "body"
+    }
+  ],
+  "metadata": {
+    "difficulty": "medium",
+    "source": "team_import",
+    "scenario": "form_cta_mobile_overflow_repair",
+    "expected_behavior": "The CTA and form should provide visible feedback, the message field should exist, and the page should fit a mobile viewport."
+  }
+}
