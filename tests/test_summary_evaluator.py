@@ -220,9 +220,9 @@ def test_markdown_report_shows_project_edit_and_repair_separately(
 
     report = report_path.read_text(encoding="utf-8")
 
-    assert "| Task | Variant | Run status | Initial test | Final test | Project edit | Repair |" in report
-    assert "sample_editing_testimonials | base | edited_and_verified | - | passed | applied | -" in report
-    assert "sample_form_overflow_repair | llm-browser-feedback | repaired_and_verified | failed | passed | - | applied" in report
+    assert "| Task | Variant | Run status | Initial test | Final test | Exec | Interaction | Visual sanity | Project edit | Repair | Project files | Repair files | Total files | Passed checks | Failed checks | Run directory |" in report
+    assert "sample_editing_testimonials | base | edited_and_verified | - | passed | 1.0000 | 1.0000 | 0.5000 | applied | - | 1 | 0 | 1 | 5 | 0 |" in report
+    assert "sample_form_overflow_repair | llm-browser-feedback | repaired_and_verified | failed | passed | 1.0000 | 1.0000 | 0.5000 | - | applied | 0 | 2 | 2 | 4 | 0 |" in report
     assert "| Repaired runs | 1 |" in report
 
 

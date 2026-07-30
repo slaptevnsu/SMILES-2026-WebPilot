@@ -142,6 +142,12 @@ class EvaluationRunRecord(BaseModel):
     initial_test_status: TestStatus | None = None
     project_edit_status: RepairStatus | None = None
     repair_status: RepairStatus | None = None
+    executability_score: float = 0.0
+    interaction_correctness_score: float = 0.0
+    visual_sanity_score: float = 0.0
+    project_edit_touched_files_count: int = 0
+    repair_touched_files_count: int = 0
+    total_touched_files_count: int = 0
 
 class EvaluationSummary(BaseModel):
     evaluation_id: str

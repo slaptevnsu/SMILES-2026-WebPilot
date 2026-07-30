@@ -7,6 +7,14 @@ from typing import Any
 
 from webpilot.runner import WebPilotRunner
 from webpilot.schemas import AgentVariant, EvaluationRunRecord, EvaluationSummary, RunSummary
+from webpilot.metrics import (
+    executability_score,
+    interaction_correctness_score,
+    project_edit_touched_files_count,
+    repair_touched_files_count,
+    total_touched_files_count,
+    visual_sanity_score,
+)
 
 
 class WebPilotEvaluator:
@@ -83,6 +91,12 @@ class WebPilotEvaluator:
             initial_test_status=initial_browser.test_status if initial_browser else None,
             project_edit_status=project_edit.status if project_edit else None,
             repair_status=repair.status if repair else None,
+            executability_score=executability_score(final_browser),
+            interaction_correctness_score=interaction_correctness_score(final_browser),
+            visual_sanity_score=visual_sanity_score(final_browser),
+            project_edit_touched_files_count=project_edit_touched_files_count(run_summary),
+            repair_touched_files_count=repair_touched_files_count(run_summary),
+            total_touched_files_count=total_touched_files_count(run_summary),
         )
 
     def _write_json(self, path: Path, data: Any) -> None:
@@ -116,8 +130,8 @@ class WebPilotEvaluator:
             "",
             "## Results",
             "",
-            "| Task | Variant | Run status | Initial test | Final test | Project edit | Repair | Passed checks | Failed checks | Run directory |",
-            "|---|---|---|---|---|---|---|---:|---:|---|",
+            "| Task | Variant | Run status | Initial test | Final test | Exec | Interaction | Visual sanity | Project edit | Repair | Project files | Repair files | Total files | Passed checks | Failed checks | Run directory |",
+            "|---|---|---|---|---|---:|---:|---:|---|---|---:|---:|---:|---:|---:|---|",
         ]
 
         for record in summary.records:
@@ -128,8 +142,14 @@ class WebPilotEvaluator:
                 f"{record.status} | "
                 f"{self._format_optional(record.initial_test_status)} | "
                 f"{self._format_optional(record.final_test_status)} | "
+                f"{record.executability_score:.4f} | "
+                f"{record.interaction_correctness_score:.4f} | "
+                f"{record.visual_sanity_score:.4f} | "
                 f"{self._format_optional(record.project_edit_status)} | "
                 f"{self._format_optional(record.repair_status)} | "
+                f"{record.project_edit_touched_files_count} | "
+                f"{record.repair_touched_files_count} | "
+                f"{record.total_touched_files_count} | "
                 f"{record.passed_test_count} | "
                 f"{record.failed_test_count} | "
                 f"`{record.run_dir}` |"
