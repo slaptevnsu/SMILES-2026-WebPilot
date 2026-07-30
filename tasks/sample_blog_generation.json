@@ -1,0 +1,30 @@
+{
+  "id": "sample_blog_generation",
+  "type": "text_generation",
+  "repo_path": "examples/blank_react_app",
+  "instruction": "Build a blog-style article page about browser-grounded web agents. The page must include a main article column, a sidebar of related posts, and a button for saving or sharing the article. Add data-testid=\"main-article\" to the article column, data-testid=\"related-posts\" to the related posts sidebar, and data-testid=\"share-article-button\" to the save/share button.",
+  "max_iterations": 2,
+  "interaction_checks": [
+    {
+      "name": "main article exists",
+      "kind": "selector_exists",
+      "target_selector": "[data-testid=\"main-article\"]:has-text(\"browser-grounded\")"
+    },
+    {
+      "name": "related posts sidebar exists",
+      "kind": "selector_exists",
+      "target_selector": "[data-testid=\"related-posts\"]:has-text(\"Related\")"
+    },
+    {
+      "name": "share article button exists",
+      "kind": "selector_exists",
+      "target_selector": "[data-testid=\"share-article-button\"]"
+    }
+  ],
+  "metadata": {
+    "difficulty": "medium",
+    "source": "team_import",
+    "scenario": "blog_article_generation",
+    "expected_behavior": "The generated page should include a main article column, related posts sidebar, and save/share button."
+  }
+}

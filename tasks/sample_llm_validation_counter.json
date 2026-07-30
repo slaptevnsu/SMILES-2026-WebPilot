@@ -1,0 +1,26 @@
+{
+  "id": "sample_llm_validation_counter",
+  "type": "text_generation",
+  "repo_path": "examples/blank_react_app",
+  "instruction": "Build a tiny Vite React counter app. The first screen must show the heading LLM validation counter, a visible count starting at 0, and a button labeled Increment. Clicking Increment must increase the visible count by 1 without navigation. Put the integer count inside an element with data-testid=\"count-value\" and no extra text. Put data-testid=\"increment-button\" on the Increment button.",
+  "max_iterations": 2,
+  "interaction_checks": [
+    {
+      "name": "counter heading exists",
+      "kind": "selector_exists",
+      "target_selector": "h1:has-text(\"LLM validation counter\")"
+    },
+    {
+      "name": "increment button increases count",
+      "kind": "click_increments_text_int",
+      "target_selector": "[data-testid=\"count-value\"]",
+      "action_selector": "[data-testid=\"increment-button\"]"
+    }
+  ],
+  "metadata": {
+    "difficulty": "easy",
+    "source": "team_import",
+    "scenario": "llm_validation_counter_generation",
+    "expected_behavior": "The generated app should show a counter initialized to 0 and increment it when the Increment button is clicked."
+  }
+}

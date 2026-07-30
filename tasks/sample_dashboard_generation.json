@@ -1,0 +1,45 @@
+{
+  "id": "sample_dashboard_generation",
+  "type": "text_generation",
+  "repo_path": "examples/blank_react_app",
+  "instruction": "Build a simple analytics dashboard. The page must include a sidebar navigation with the text Dashboard, a summary stats bar at the top, and a data table showing at least three account rows: Acme Corp, Globex, and Initech. Add data-testid=\"sidebar-navigation\" to the sidebar, data-testid=\"stats-bar\" to the stats bar, and data-testid=\"accounts-table\" to the table.",
+  "max_iterations": 2,
+  "interaction_checks": [
+    {
+      "name": "sidebar navigation exists",
+      "kind": "selector_exists",
+      "target_selector": "[data-testid=\"sidebar-navigation\"]:has-text(\"Dashboard\")"
+    },
+    {
+      "name": "stats bar exists",
+      "kind": "selector_exists",
+      "target_selector": "[data-testid=\"stats-bar\"]"
+    },
+    {
+      "name": "accounts table exists",
+      "kind": "selector_exists",
+      "target_selector": "[data-testid=\"accounts-table\"]"
+    },
+    {
+      "name": "first account row exists",
+      "kind": "selector_exists",
+      "target_selector": "[data-testid=\"accounts-table\"]:has-text(\"Acme Corp\")"
+    },
+    {
+      "name": "second account row exists",
+      "kind": "selector_exists",
+      "target_selector": "[data-testid=\"accounts-table\"]:has-text(\"Globex\")"
+    },
+    {
+      "name": "third account row exists",
+      "kind": "selector_exists",
+      "target_selector": "[data-testid=\"accounts-table\"]:has-text(\"Initech\")"
+    }
+  ],
+  "metadata": {
+    "difficulty": "medium",
+    "source": "team_import",
+    "scenario": "analytics_dashboard_generation",
+    "expected_behavior": "The generated page should include a sidebar navigation, top stats bar, and account table with at least three specified rows."
+  }
+}
