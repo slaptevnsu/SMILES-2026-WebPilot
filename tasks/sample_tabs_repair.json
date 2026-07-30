@@ -1,0 +1,22 @@
+{
+  "id": "sample_tabs_repair",
+  "type": "diagnostic_repair",
+  "repo_path": "examples/buggy_tabs_app",
+  "instruction": "Diagnose and repair the tabs. Clicking the Details tab should switch the visible panel from Overview to Details.",
+  "max_iterations": 2,
+  "interaction_checks": [
+    {
+      "name": "details tab reveals details panel",
+      "kind": "tabs_switch_content",
+      "action_selector": "button[role=\"tab\"]:has-text(\"Details\")",
+      "target_selector": "section[role=\"tabpanel\"]:has-text(\"Details\")",
+      "target_text": "The details panel should appear after clicking the Details tab."
+    }
+  ],
+  "metadata": {
+    "difficulty": "easy",
+    "source": "team_import",
+    "scenario": "tabs_repair",
+    "expected_behavior": "Clicking the Details tab should make the Details panel visible."
+  }
+}

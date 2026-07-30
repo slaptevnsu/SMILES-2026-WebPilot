@@ -1,0 +1,22 @@
+{
+  "id": "sample_nav_repair",
+  "type": "diagnostic_repair",
+  "repo_path": "examples/buggy_nav_app",
+  "instruction": "Diagnose and repair the navigation menu. When the Menu button is clicked, the navigation links should become visible.",
+  "max_iterations": 2,
+  "interaction_checks": [
+    {
+      "name": "menu click reveals navigation links",
+      "kind": "click_reveals_text",
+      "action_selector": "button[aria-label=\"Open menu\"]",
+      "target_selector": "nav[aria-label=\"Primary navigation\"]",
+      "target_text": "Reports"
+    }
+  ],
+  "metadata": {
+    "difficulty": "easy",
+    "source": "team_import",
+    "scenario": "navigation_menu_repair",
+    "expected_behavior": "Clicking the menu button should reveal the navigation links."
+  }
+}
