@@ -1,0 +1,35 @@
+{
+  "id": "sample_editing_newsletter",
+  "type": "editing",
+  "repo_path": "examples/editable_landing_app",
+  "instruction": "Edit the landing page by adding a newsletter signup section before the contact section. The newsletter section should include visible newsletter text, an email input, and a subscribe button. Preserve the existing contact section and the rest of the page.",
+  "max_iterations": 2,
+  "interaction_checks": [
+    {
+      "name": "newsletter section exists",
+      "kind": "selector_exists",
+      "target_selector": "section:has-text(\"Newsletter\")"
+    },
+    {
+      "name": "newsletter email input exists",
+      "kind": "selector_exists",
+      "target_selector": "section:has-text(\"Newsletter\") input[type=\"email\"]"
+    },
+    {
+      "name": "newsletter subscribe button exists",
+      "kind": "selector_exists",
+      "target_selector": "section:has-text(\"Newsletter\") button:has-text(\"Subscribe\")"
+    },
+    {
+      "name": "contact section remains visible",
+      "kind": "selector_exists",
+      "target_selector": ".contact-section:has-text(\"Contact\")"
+    }
+  ],
+  "metadata": {
+    "difficulty": "easy",
+    "source": "team_import",
+    "scenario": "landing_page_newsletter_edit",
+    "expected_behavior": "The page should include a newsletter signup section before the existing contact section, with an email input and Subscribe button."
+  }
+}
