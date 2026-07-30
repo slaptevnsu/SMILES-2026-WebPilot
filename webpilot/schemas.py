@@ -106,6 +106,7 @@ class RunSummary(BaseModel):
     message: str
     browser: BrowserRunResult | None = None
     initial_browser: BrowserRunResult | None = None
+    project_edit: RepairResult | None = None
     repair: RepairResult | None = None
     repair_iterations: list[RepairIterationRecord] = Field(default_factory=list)
 
@@ -139,6 +140,7 @@ class EvaluationRunRecord(BaseModel):
     failed_test_count: int = 0
     initial_browser_status: str | None = None
     initial_test_status: TestStatus | None = None
+    project_edit_status: RepairStatus | None = None
     repair_status: RepairStatus | None = None
 
 class EvaluationSummary(BaseModel):

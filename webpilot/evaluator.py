@@ -66,6 +66,7 @@ class WebPilotEvaluator:
     def _build_record(self, run_summary: RunSummary) -> EvaluationRunRecord:
         final_browser = run_summary.browser
         initial_browser = run_summary.initial_browser
+        project_edit = run_summary.project_edit
         repair = run_summary.repair
 
         return EvaluationRunRecord(
@@ -80,6 +81,7 @@ class WebPilotEvaluator:
             failed_test_count=final_browser.failed_test_count if final_browser else 0,
             initial_browser_status=initial_browser.status if initial_browser else None,
             initial_test_status=initial_browser.test_status if initial_browser else None,
+            project_edit_status=project_edit.status if project_edit else None,
             repair_status=repair.status if repair else None,
         )
 
@@ -114,8 +116,8 @@ class WebPilotEvaluator:
             "",
             "## Results",
             "",
-            "| Task | Variant | Run status | Initial test | Final test | Repair | Passed checks | Failed checks | Run directory |",
-            "|---|---|---|---|---|---|---:|---:|---|",
+            "| Task | Variant | Run status | Initial test | Final test | Project edit | Repair | Passed checks | Failed checks | Run directory |",
+            "|---|---|---|---|---|---|---|---:|---:|---|",
         ]
 
         for record in summary.records:
@@ -126,6 +128,7 @@ class WebPilotEvaluator:
                 f"{record.status} | "
                 f"{self._format_optional(record.initial_test_status)} | "
                 f"{self._format_optional(record.final_test_status)} | "
+                f"{self._format_optional(record.project_edit_status)} | "
                 f"{self._format_optional(record.repair_status)} | "
                 f"{record.passed_test_count} | "
                 f"{record.failed_test_count} | "
@@ -164,7 +167,7 @@ class WebPilotEvaluator:
 
         if "base" in variants:
             lines.append(
-                "- `base` runs execute the task without repair and are expected to fail on diagnostic repair tasks."
+                "- `base` runs use one-shot project editing for generation/editing tasks and no repair for diagnostic repair tasks."
             )
 
         if "deterministic-browser-feedback" in variants:

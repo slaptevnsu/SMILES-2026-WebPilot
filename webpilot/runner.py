@@ -63,6 +63,7 @@ class WebPilotRunner:
 
         initial_browser_result: BrowserRunResult | None = None
         final_browser_result: BrowserRunResult | None = None
+        project_edit_result_summary: RepairResult | None = None
         repair_result: RepairResult | None = None
         repair_iterations: list[RepairIterationRecord] = []
         test_proposal_result: dict[str, Any] | None = None
@@ -82,7 +83,7 @@ class WebPilotRunner:
                 repo_path=workspace_repo_path,
                 run_dir=run_dir,
             )
-            repair_result = project_edit_result
+            project_edit_result_summary = project_edit_result
 
             browser_after_dir = (
                 run_dir / "browser_after_edit"
@@ -265,6 +266,7 @@ class WebPilotRunner:
             message=message,
             browser=final_browser_result,
             initial_browser=initial_browser_result,
+            project_edit=project_edit_result_summary,
             repair=repair_result,
             repair_iterations=repair_iterations,
         )
