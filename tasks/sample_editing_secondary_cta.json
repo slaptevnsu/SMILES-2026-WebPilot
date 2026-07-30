@@ -1,0 +1,25 @@
+{
+  "id": "sample_editing_secondary_cta",
+  "type": "editing",
+  "repo_path": "examples/editable_landing_app",
+  "instruction": "Edit the landing page by adding a secondary CTA button in the hero section labeled View case studies. Preserve the existing primary CTA link labeled Talk to us and the rest of the page.",
+  "max_iterations": 2,
+  "interaction_checks": [
+    {
+      "name": "secondary CTA button exists",
+      "kind": "selector_exists",
+      "target_selector": ".hero-section button:has-text(\"View case studies\")"
+    },
+    {
+      "name": "primary CTA remains visible",
+      "kind": "selector_exists",
+      "target_selector": ".hero-section .cta-button:has-text(\"Talk to us\")"
+    }
+  ],
+  "metadata": {
+    "difficulty": "easy",
+    "source": "team_import",
+    "scenario": "landing_page_secondary_cta_edit",
+    "expected_behavior": "The hero section should contain the existing primary CTA link labeled Talk to us and a new secondary CTA button labeled View case studies."
+  }
+}
