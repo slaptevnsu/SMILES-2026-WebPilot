@@ -67,9 +67,9 @@ class WebPilotRunner:
         repair_iterations: list[RepairIterationRecord] = []
         test_proposal_result: dict[str, Any] | None = None
 
-        if task.task_type == "text_generation":
+        if task.task_type in {"text_generation", "editing"}:
             if task.repo_path is None:
-                raise ValueError("text_generation task must define repo_path for the starter app")
+                raise ValueError(f"{task.task_type} task must define repo_path")
 
             source_repo_path = self._resolve_path(task.repo_path)
             workspace_repo_path = self._prepare_workspace_repo(
@@ -77,26 +77,39 @@ class WebPilotRunner:
                 run_dir=run_dir,
             )
 
-            generation_result = LLMGenerator().run(
+            project_edit_result = LLMGenerator().run(
                 task=task,
                 repo_path=workspace_repo_path,
                 run_dir=run_dir,
             )
-            repair_result = generation_result
+            repair_result = project_edit_result
 
-            if generation_result.status == "applied":
+            browser_after_dir = (
+                run_dir / "browser_after_edit"
+                if task.task_type == "editing"
+                else run_dir / "browser_after_generation"
+            )
+
+            if project_edit_result.status == "applied":
                 final_browser_result = BrowserExecutor().run(
                     repo_path=workspace_repo_path,
-                    run_dir=run_dir / "browser_after_generation",
+                    run_dir=browser_after_dir,
                     task=task,
                 )
 
                 if final_browser_result.status == "ok":
-                    status = "generated_and_verified"
-                    message = (
-                        "The LLM generated a frontend implementation, "
-                        "the app was launched in a browser, and it passed browser verification."
-                    )
+                    if task.task_type == "editing":
+                        status = "edited_and_verified"
+                        message = (
+                            "The LLM edited the frontend project, "
+                            "the app was launched in a browser, and it passed browser verification."
+                        )
+                    else:
+                        status = "generated_and_verified"
+                        message = (
+                            "The LLM generated a frontend implementation, "
+                            "the app was launched in a browser, and it passed browser verification."
+                        )
                 elif variant in REPAIR_VARIANTS:
                     test_proposal_result = self._run_test_planner_if_needed(
                         task=task,
@@ -122,33 +135,56 @@ class WebPilotRunner:
                         repair_result = loop_repair_result
 
                     if final_browser_result.status == "ok":
-                        status = "generated_repaired_and_verified"
-                        message = (
-                            "The initial generated app failed browser verification, "
-                            f"{REPAIR_DESCRIPTIONS[variant]} was applied, and the app passed browser verification."
-                        )
+                        if task.task_type == "editing":
+                            status = "edit_repaired_and_verified"
+                            message = (
+                                "The initial edited app failed browser verification, "
+                                f"{REPAIR_DESCRIPTIONS[variant]} was applied, and the app passed browser verification."
+                            )
+                        else:
+                            status = "generated_repaired_and_verified"
+                            message = (
+                                "The initial generated app failed browser verification, "
+                                f"{REPAIR_DESCRIPTIONS[variant]} was applied, and the app passed browser verification."
+                            )
                     elif loop_repair_result is not None and loop_repair_result.status == "applied":
-                        status = "generation_repair_attempted_with_issues"
+                        status = (
+                            "edit_repair_attempted_with_issues"
+                            if task.task_type == "editing"
+                            else "generation_repair_attempted_with_issues"
+                        )
                         message = (
-                            "One or more repair iterations were applied to the generated app, "
+                            "One or more repair iterations were applied after the initial project edit, "
                             "but the app still did not pass browser verification."
                         )
                     else:
-                        status = "generation_repair_skipped_or_failed"
+                        status = (
+                            "edit_repair_skipped_or_failed"
+                            if task.task_type == "editing"
+                            else "generation_repair_skipped_or_failed"
+                        )
                         message = (
-                            "The generated app failed browser verification, "
+                            "The initial project edit failed browser verification, "
                             "but no repair was successfully applied."
                         )
                 else:
-                    status = "generated_with_issues"
+                    status = (
+                        "edited_with_issues"
+                        if task.task_type == "editing"
+                        else "generated_with_issues"
+                    )
                     message = (
-                        "The LLM generated a frontend implementation, "
-                        "but the generated app did not pass browser verification."
+                        "The LLM project edit was applied, "
+                        "but the app did not pass browser verification."
                     )
             else:
-                status = "generation_skipped_or_failed"
+                status = (
+                    "edit_skipped_or_failed"
+                    if task.task_type == "editing"
+                    else "generation_skipped_or_failed"
+                )
                 message = (
-                    "The LLM generation step did not produce an applicable project edit."
+                    "The LLM project edit step did not produce an applicable change."
                 )
 
         elif task.task_type == "diagnostic_repair":
@@ -383,6 +419,17 @@ class WebPilotRunner:
                     "If verification fails, run the shared repair iteration loop",
                 ]
             )
+        elif task.task_type == "editing":
+            steps.extend(
+                [
+                    "Copy the provided editable frontend repository into a run workspace",
+                    "Apply an LLM-generated project edit from the instruction",
+                    "Run the edited project in a browser",
+                    "Collect screenshot, DOM snapshot, console logs, and page errors",
+                    "Run declarative interaction checks from the task specification",
+                    "If verification fails, run the shared repair iteration loop",
+                ]
+            )
         elif task.task_type == "diagnostic_repair":
             steps.extend(
                 [
@@ -459,6 +506,25 @@ class WebPilotRunner:
                     "browser_after_generation/page_errors.json",
                     "browser_after_generation/test_results.json",
                     "browser_after_generation/browser_result.json",
+                ]
+            )
+
+        elif task.task_type == "editing":
+            expected_artifacts.extend(
+                [
+                    "llm_edit/llm_prompt.txt",
+                    "llm_edit/llm_response.txt",
+                    "llm_edit/edit_plan.json",
+                    "llm_edit/changed_files.json",
+                    "llm_edit/patch.diff",
+                    "browser_after_edit/npm_install.log",
+                    "browser_after_edit/dev_server.log",
+                    "browser_after_edit/screenshot.png",
+                    "browser_after_edit/dom_snapshot.html",
+                    "browser_after_edit/console_logs.json",
+                    "browser_after_edit/page_errors.json",
+                    "browser_after_edit/test_results.json",
+                    "browser_after_edit/browser_result.json",
                 ]
             )
 

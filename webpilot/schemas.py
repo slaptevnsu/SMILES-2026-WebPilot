@@ -6,7 +6,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
-TaskType = Literal["text_generation", "diagnostic_repair"]
+TaskType = Literal["text_generation", "diagnostic_repair", "editing"]
 AgentVariant = Literal[
     "base",
     "deterministic-browser-feedback",
@@ -72,8 +72,8 @@ class Task(BaseModel):
 
     @model_validator(mode="after")
     def validate_task(self) -> "Task":
-        if self.task_type == "diagnostic_repair" and self.repo_path is None:
-            raise ValueError("diagnostic_repair tasks must define repo_path")
+        if self.task_type in {"diagnostic_repair", "editing"} and self.repo_path is None:
+            raise ValueError(f"{self.task_type} tasks must define repo_path")
         if self.max_iterations < 1:
             raise ValueError("max_iterations must be >= 1")
         return self
