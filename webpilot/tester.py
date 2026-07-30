@@ -41,6 +41,12 @@ class InteractionTester:
         if check.kind in {"click_reveals_text", "tabs_switch_content"}:
             return self._test_click_reveals_visible_target(page=page, check=check)
 
+        if check.kind == "selector_exists":
+            return self._test_selector_exists(page=page, check=check)
+
+        if check.kind == "no_mobile_horizontal_overflow":
+            return self._test_no_mobile_horizontal_overflow(page=page, check=check)
+
         return TestCheckResult(
             name=check.name,
             status="skipped",
@@ -203,6 +209,98 @@ class InteractionTester:
 
         except Exception as exc:
             return self._build_exception_check(check=check, exc=exc)
+
+    def _test_selector_exists(
+        self,
+        *,
+        page: Page,
+        check: InteractionCheck,
+    ) -> TestCheckResult:
+        try:
+            locator = page.locator(check.target_selector)
+            count = locator.count()
+            visible = count > 0 and locator.first.is_visible(timeout=check.timeout_ms)
+            passed = count > 0 and visible
+
+            return TestCheckResult(
+                name=check.name,
+                status="passed" if passed else "failed",
+                details={
+                    "kind": check.kind,
+                    "target_selector": check.target_selector,
+                    "count": count,
+                    "visible": visible,
+                    "reason": (
+                        "Selector exists and is visible."
+                        if passed
+                        else "Selector does not exist or is not visible."
+                    ),
+                },
+            )
+
+        except Exception as exc:
+            return self._build_exception_check(check=check, exc=exc)
+
+    def _test_no_mobile_horizontal_overflow(
+        self,
+        *,
+        page: Page,
+        check: InteractionCheck,
+    ) -> TestCheckResult:
+        original_viewport = page.viewport_size
+
+        try:
+            page.set_viewport_size({"width": 390, "height": 844})
+            page.wait_for_timeout(check.settle_ms)
+
+            metrics = page.evaluate(
+                """() => {
+                    const doc = document.documentElement;
+                    const body = document.body;
+
+                    const clientWidth = doc.clientWidth;
+                    const scrollWidth = Math.max(
+                        doc.scrollWidth,
+                        body ? body.scrollWidth : 0
+                    );
+
+                    return {
+                        innerWidth: window.innerWidth,
+                        clientWidth,
+                        scrollWidth,
+                        overflowPx: scrollWidth - clientWidth
+                    };
+                }"""
+            )
+
+            overflow_px = int(metrics["overflowPx"])
+            passed = overflow_px <= 1
+
+            return TestCheckResult(
+                name=check.name,
+                status="passed" if passed else "failed",
+                details={
+                    "kind": check.kind,
+                    "target_selector": check.target_selector,
+                    "viewport": {"width": 390, "height": 844},
+                    "inner_width": metrics["innerWidth"],
+                    "client_width": metrics["clientWidth"],
+                    "scroll_width": metrics["scrollWidth"],
+                    "overflow_px": overflow_px,
+                    "reason": (
+                        "Mobile viewport has no horizontal overflow."
+                        if passed
+                        else "Mobile viewport has horizontal overflow."
+                    ),
+                },
+            )
+
+        except Exception as exc:
+            return self._build_exception_check(check=check, exc=exc)
+
+        finally:
+            if original_viewport is not None:
+                page.set_viewport_size(original_viewport)
 
     def _build_exception_check(
         self,

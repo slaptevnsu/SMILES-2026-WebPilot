@@ -21,6 +21,8 @@ InteractionCheckKind = Literal[
     "fill_updates_text",
     "click_reveals_text",
     "tabs_switch_content",
+    "selector_exists",
+    "no_mobile_horizontal_overflow",
 ]
 
 
