@@ -1,0 +1,40 @@
+{
+  "id": "sample_editing_testimonials",
+  "type": "editing",
+  "repo_path": "examples/editable_landing_app",
+  "instruction": "Edit the landing page by adding a testimonials section below the pricing section and before the contact section. The section should have the heading Testimonials and include two customer quotes: The workflow finally feels calm and Our launch checklist is much clearer. Preserve the existing pricing section, contact section, and the rest of the page.",
+  "max_iterations": 2,
+  "interaction_checks": [
+    {
+      "name": "testimonials section exists",
+      "kind": "selector_exists",
+      "target_selector": "section:has-text(\"Testimonials\")"
+    },
+    {
+      "name": "first testimonial quote exists",
+      "kind": "selector_exists",
+      "target_selector": "section:has-text(\"Testimonials\"):has-text(\"The workflow finally feels calm\")"
+    },
+    {
+      "name": "second testimonial quote exists",
+      "kind": "selector_exists",
+      "target_selector": "section:has-text(\"Testimonials\"):has-text(\"Our launch checklist is much clearer\")"
+    },
+    {
+      "name": "pricing section remains visible",
+      "kind": "selector_exists",
+      "target_selector": ".pricing-section:has-text(\"Pricing\")"
+    },
+    {
+      "name": "contact section remains visible",
+      "kind": "selector_exists",
+      "target_selector": ".contact-section:has-text(\"Contact\")"
+    }
+  ],
+  "metadata": {
+    "difficulty": "easy",
+    "source": "team_import",
+    "scenario": "landing_page_testimonials_edit",
+    "expected_behavior": "The page should include a testimonials section below pricing and before contact, with two specified customer quotes."
+  }
+}
